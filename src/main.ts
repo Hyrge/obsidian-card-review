@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Notice, Plugin, TFile, Menu } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import { AllCardsView, ALL_CARDS_VIEW_TYPE } from './views/AllCardsView';
 import { PreactCardReviewModal } from './PreactCardReviewModal';
 import { CardReviewSettingTab } from './CardReviewSettingTab';
@@ -25,53 +25,23 @@ export default class CardReviewPlugin extends Plugin {
 		// AllCardsView 등록
 		this.registerView(ALL_CARDS_VIEW_TYPE, (leaf) => new AllCardsView(leaf, this));
 
-		// 리본 아이콘 추가 (드롭다운 메뉴 포함)
-		const ribbonIcon = this.addRibbonIcon('book-open', '카드 리뷰', (evt: MouseEvent) => {
-			// 드롭다운 메뉴 생성
-			const menu = new Menu();
-			
-			// 카드 리뷰 메뉴 아이템
-			menu.addItem((item: any) => {
-				item
-					.setTitle('카드 리뷰 시작')
-					.setIcon('play')
-					.onClick(() => this.startCardReview());
-			});
-			
-			// 모든 카드 보기 메뉴 아이템
-			menu.addItem((item: any) => {
-				item
-					.setTitle('모든 카드 보기')
-					.setIcon('list')
-					.onClick(() => this.openAllCardsView());
-			});
-			
-			// 구분선 추가
-			menu.addSeparator();
-			
-			// 카드 리셋 메뉴 아이템
-			menu.addItem((item: any) => {
-				item
-					.setTitle('모든 카드 리셋')
-					.setIcon('refresh-cw')
-					.onClick(async () => {
-						const reviewedCards = this.cards.filter(card => card.reviewed);
-						if (reviewedCards.length === 0) {
-							new Notice('리셋할 카드가 없습니다.');
-							return;
-						}
-						
-						await this.resetAllCards();
-						new Notice(`${reviewedCards.length}개의 카드가 리뷰 대기 상태로 리셋되었습니다.`);
-					});
-			});
-			
-			// 메뉴 표시
-			menu.showAtPosition({ x: evt.pageX, y: evt.pageY });
+		// 카드 리뷰 리본 아이콘
+		const reviewRibbonIcon = this.addRibbonIcon('play', '카드 리뷰 시작', (evt: MouseEvent) => {
+			this.startCardReview();
 		});
 		
-		// 리뷰 대기 카드 수를 표시하는 배지 추가
-		setTimeout(() => this.updateRibbonBadge(ribbonIcon), 100);
+		// 모든 카드 보기 리본 아이콘
+		const allCardsRibbonIcon = this.addRibbonIcon('list', '모든 카드 보기', (evt: MouseEvent) => {
+			this.openAllCardsView();
+		});
+		
+		// 카드 리셋 리본 아이콘
+		const resetRibbonIcon = this.addRibbonIcon('refresh-cw', '모든 카드 리셋', (evt: MouseEvent) => {
+			this.resetAllCardsWithNotice();
+		});
+		
+		// 리뷰 대기 카드 수를 표시하는 배지 추가 (카드 리뷰 아이콘에만)
+		setTimeout(() => this.updateRibbonBadge(reviewRibbonIcon), 100);
 
 		// 선택한 텍스트를 카드로 만들기 명령어
 		this.addCommand({
@@ -204,6 +174,17 @@ export default class CardReviewPlugin extends Plugin {
 		this.updateRibbonBadge();
 	}
 
+	async resetAllCardsWithNotice() {
+		const reviewedCards = this.cards.filter(card => card.reviewed);
+		if (reviewedCards.length === 0) {
+			new Notice('리셋할 카드가 없습니다.');
+			return;
+		}
+		
+		await this.resetAllCards();
+		new Notice(`${reviewedCards.length}개의 카드가 리뷰 대기 상태로 리셋되었습니다.`);
+	}
+
 	async openAllCardsView() {
 		const existing = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
 		if (existing.length > 0) {
@@ -222,7 +203,10 @@ export default class CardReviewPlugin extends Plugin {
 		const leaves = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
 		leaves.forEach(leaf => {
 			if (leaf.view instanceof AllCardsView) {
-				leaf.view.refresh();
+				// 약간의 지연을 두고 새로고침 (DOM 업데이트 보장)
+				setTimeout(() => {
+					(leaf.view as AllCardsView).refresh();
+				}, 10);
 			}
 		});
 	}

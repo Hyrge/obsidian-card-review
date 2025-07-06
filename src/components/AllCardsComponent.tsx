@@ -73,9 +73,11 @@ export function AllCardsComponent({
   app, 
   plugin 
 }: AllCardsComponentProps) {
-  const total = cards.length;
-  const reviewed = cards.filter(c => c.reviewed).length;
-  const unreviewed = cards.filter(c => !c.reviewed).length;
+  // 전체 카드 통계 (현재 페이지가 아닌 전체)
+  const allCards = (plugin as any).cards || [];
+  const total = allCards.length;
+  const reviewed = allCards.filter((c: any) => c.reviewed).length;
+  const unreviewed = allCards.filter((c: any) => !c.reviewed).length;
 
   return (
     <div class="all-cards-view">
@@ -102,7 +104,7 @@ export function AllCardsComponent({
             disabled={reviewed === 0}
             title="저장된 카드를 모두 리뷰 대기 상태로 돌아가게 합니다"
           >
-            모든 카드 리셋
+            {reviewed === 0 ? '리셋할 카드 없음' : '모든 카드 리셋'}
           </button>
         </div>
       </div>

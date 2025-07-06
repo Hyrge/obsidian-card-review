@@ -40,17 +40,39 @@ export class AllCardsView extends ItemView {
     container.empty();
 
     const handleDeleteCard = async (cardId: string) => {
-      await this.plugin.deleteCard(cardId);
-      this.renderCards(); // 목록 새로고침
+      try {
+        await this.plugin.deleteCard(cardId);
+        
+        // 현재 페이지의 카드가 모두 삭제되었으면 이전 페이지로 이동
+        const currentCards = this.plugin.getCardsByPage(this.currentPage, this.itemsPerPage);
+        if (currentCards.length === 0 && this.currentPage > 0) {
+          this.currentPage--;
+        }
+        
+        this.renderCards(); // 목록 새로고침
+      } catch (error) {
+        console.error('카드 삭제 중 오류:', error);
+      }
     };
 
     const handleResetAllCards = async () => {
-      const reviewedCards = this.plugin.cards.filter(card => card.reviewed);
-      if (reviewedCards.length === 0) {
-        return;
+      try {
+        const reviewedCards = this.plugin.cards.filter(card => card.reviewed);
+        if (reviewedCards.length === 0) {
+          return;
+        }
+        
+        // 리셋 실행
+        await this.plugin.resetAllCards();
+        
+        // 페이지를 0으로 리셋
+        this.currentPage = 0;
+        
+        // 목록 새로고침
+        this.renderCards();
+      } catch (error) {
+        console.error('카드 리셋 중 오류:', error);
       }
-      await this.plugin.resetAllCards();
-      this.renderCards(); // 목록 새로고침
     };
 
     const handlePageChange = (page: number) => {
