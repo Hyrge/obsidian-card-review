@@ -1,41 +1,9 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, ButtonComponent } from 'obsidian';
-import { h, render } from 'preact';
-import { CardReviewModal } from './components/CardReviewModal';
+import { App, Editor, MarkdownView, Notice, Plugin, TFile, Menu } from 'obsidian';
 import { AllCardsView, ALL_CARDS_VIEW_TYPE } from './views/AllCardsView';
-
-// Remember to rename these classes and interfaces!
-
-interface CardData {
-	id: string;
-	text: string;
-	source: string;
-	createdAt: number;
-	reviewed: boolean;
-	kept: boolean;
-}
-
-interface CardReviewSettings {
-	autoSave: boolean;
-	reviewBatchSize: number;
-	mobileFullWidth: boolean;
-}
-
-const DEFAULT_SETTINGS: CardReviewSettings = {
-	autoSave: true,
-	reviewBatchSize: 10,
-	mobileFullWidth: false
-}
-
-// 카드 목록을 페이지 단위로 로드
-interface CardPage {
-	page: number;
-	cards: CardData[];
-	total: number;
-	hasMore: boolean;
-}
-
-// 모든 카드 보기에서 20개씩만 렌더링
-const ITEMS_PER_PAGE = 20;
+import { PreactCardReviewModal } from './PreactCardReviewModal';
+import { CardReviewSettingTab } from './CardReviewSettingTab';
+import type { CardData, CardReviewSettings } from './types';
+import { DEFAULT_SETTINGS } from './types';
 
 export default class CardReviewPlugin extends Plugin {
 	settings!: CardReviewSettings;
@@ -46,7 +14,6 @@ export default class CardReviewPlugin extends Plugin {
 	private allCardsCache: CardData[] = [];
 	private cacheTimestamp: number = 0;
 	private readonly CACHE_DURATION = 5000; // 5초
-	unreviewedCards: CardData[] = [];
 
 	async onload() {
 		await this.loadSettings();
@@ -58,10 +25,53 @@ export default class CardReviewPlugin extends Plugin {
 		// AllCardsView 등록
 		this.registerView(ALL_CARDS_VIEW_TYPE, (leaf) => new AllCardsView(leaf, this));
 
-		// 리본 아이콘 추가
-		this.addRibbonIcon('cards', '카드 리뷰', (evt: MouseEvent) => {
-			this.startCardReview();
+		// 리본 아이콘 추가 (드롭다운 메뉴 포함)
+		const ribbonIcon = this.addRibbonIcon('book-open', '카드 리뷰', (evt: MouseEvent) => {
+			// 드롭다운 메뉴 생성
+			const menu = new Menu();
+			
+			// 카드 리뷰 메뉴 아이템
+			menu.addItem((item: any) => {
+				item
+					.setTitle('카드 리뷰 시작')
+					.setIcon('play')
+					.onClick(() => this.startCardReview());
+			});
+			
+			// 모든 카드 보기 메뉴 아이템
+			menu.addItem((item: any) => {
+				item
+					.setTitle('모든 카드 보기')
+					.setIcon('list')
+					.onClick(() => this.openAllCardsView());
+			});
+			
+			// 구분선 추가
+			menu.addSeparator();
+			
+			// 카드 리셋 메뉴 아이템
+			menu.addItem((item: any) => {
+				item
+					.setTitle('모든 카드 리셋')
+					.setIcon('refresh-cw')
+					.onClick(async () => {
+						const reviewedCards = this.cards.filter(card => card.reviewed);
+						if (reviewedCards.length === 0) {
+							new Notice('리셋할 카드가 없습니다.');
+							return;
+						}
+						
+						await this.resetAllCards();
+						new Notice(`${reviewedCards.length}개의 카드가 리뷰 대기 상태로 리셋되었습니다.`);
+					});
+			});
+			
+			// 메뉴 표시
+			menu.showAtPosition({ x: evt.pageX, y: evt.pageY });
 		});
+		
+		// 리뷰 대기 카드 수를 표시하는 배지 추가
+		setTimeout(() => this.updateRibbonBadge(ribbonIcon), 100);
 
 		// 선택한 텍스트를 카드로 만들기 명령어
 		this.addCommand({
@@ -150,10 +160,15 @@ export default class CardReviewPlugin extends Plugin {
 		
 		// AllCardsView가 열려있으면 새로고침
 		this.refreshAllCardsView();
+		
+		// 리본 배지 업데이트
+		this.updateRibbonBadge();
 	}
 
 	async startCardReview() {
-		if (this.unreviewedCards.length === 0) {
+		const unreviewed = this.getUnreviewedCards();
+		
+		if (unreviewed.length === 0) {
 			// 리뷰할 카드가 없을 때, 리뷰 완료된 카드가 있는지 확인
 			const reviewedCards = this.cards.filter(card => card.reviewed);
 			
@@ -163,10 +178,9 @@ export default class CardReviewPlugin extends Plugin {
 				new Notice('모든 카드 리뷰가 완료되었습니다! 다시 처음부터 리뷰를 시작합니다.');
 				
 				// 리셋 후 다시 리뷰 시작
-				const resetUnreviewed = this.cards.filter(card => !card.reviewed);
+				const resetUnreviewed = this.getUnreviewedCards();
 				if (resetUnreviewed.length > 0) {
-					this.unreviewedCards = resetUnreviewed;
-					new PreactCardReviewModal(this.app, this, this.unreviewedCards).open();
+					new PreactCardReviewModal(this.app, this, resetUnreviewed).open();
 				}
 			} else {
 				new Notice('리뷰할 카드가 없습니다.');
@@ -174,7 +188,7 @@ export default class CardReviewPlugin extends Plugin {
 			return;
 		}
 
-		new PreactCardReviewModal(this.app, this, this.unreviewedCards).open();
+		new PreactCardReviewModal(this.app, this, unreviewed).open();
 	}
 
 	async resetAllCards() {
@@ -187,6 +201,7 @@ export default class CardReviewPlugin extends Plugin {
 		
 		await this.saveCards();
 		this.refreshAllCardsView();
+		this.updateRibbonBadge();
 	}
 
 	async openAllCardsView() {
@@ -220,6 +235,7 @@ export default class CardReviewPlugin extends Plugin {
 			this.invalidateCache(); // 캐시 무효화
 			await this.saveCards();
 			this.refreshAllCardsView();
+			this.updateRibbonBadge();
 		}
 	}
 
@@ -228,6 +244,7 @@ export default class CardReviewPlugin extends Plugin {
 		this.invalidateCache(); // 캐시 무효화
 		await this.saveCards();
 		this.refreshAllCardsView();
+		this.updateRibbonBadge();
 	}
 
 	async loadCards() {
@@ -291,120 +308,48 @@ export default class CardReviewPlugin extends Plugin {
 	getTotalPages(itemsPerPage: number = 50): number {
 		return Math.ceil(this.cards.length / itemsPerPage);
 	}
-}
 
-class PreactCardReviewModal extends Modal {
-	plugin: CardReviewPlugin;
-	cards: CardData[];
-
-	constructor(app: App, plugin: CardReviewPlugin, cards: CardData[]) {
-		super(app);
-		this.plugin = plugin;
-		this.cards = cards;
-	}
-
-	onOpen() {
-		const { contentEl } = this;
-		const handleKeep = (id: string) => {
-			// UI 먼저 업데이트 (즉시 반응)
-			this.cards = this.cards.filter(card => card.id !== id);
-			
-			if (this.cards.length === 0) {
-				this.close();
-			} else {
-				this.rerender();
-			}
-			
-			// 데이터 저장은 백그라운드에서 처리
-			this.plugin.saveCard(id, true).catch(error => {
-				console.error('카드 저장 중 오류:', error);
-			});
-		};
+	// 리본 아이콘 배지 업데이트
+	private updateRibbonBadge(ribbonIcon?: HTMLElement) {
+		const unreviewedCount = this.getUnreviewedCards().length;
 		
-		const handleDiscard = (id: string) => {
-			// UI 먼저 업데이트 (즉시 반응)
-			this.cards = this.cards.filter(card => card.id !== id);
-			
-			if (this.cards.length === 0) {
-				this.close();
-			} else {
-				this.rerender();
-			}
-			
-			// 데이터 삭제는 백그라운드에서 처리
-			this.plugin.deleteCard(id).catch(error => {
-				console.error('카드 삭제 중 오류:', error);
-			});
-		};
+		// 리본 아이콘 찾기
+		const icon = ribbonIcon || document.querySelector('.ribbon-icon[aria-label="카드 리뷰"]') as HTMLElement;
+		if (!icon) {
+			console.log('리본 아이콘을 찾을 수 없습니다');
+			return;
+		}
 		
-		this.rerender = () => {
-			contentEl.empty();
-			render(
-				h(CardReviewModal, {
-					key: this.cards.length > 0 ? this.cards[0].id : 'no-cards',
-					cards: this.cards,
-					onKeep: handleKeep,
-					onDiscard: handleDiscard,
-					component: this.plugin
-				}),
-				contentEl
-			);
-		};
-		this.rerender();
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
-	private rerender: () => void = () => {};
-}
-
-class CardReviewSettingTab extends PluginSettingTab {
-	plugin: CardReviewPlugin;
-
-	constructor(app: App, plugin: CardReviewPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-	
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-
-		containerEl.createEl('h2', { text: '카드 리뷰 설정' });
-
-		new Setting(containerEl)
-			.setName('자동 저장')
-			.setDesc('카드 리뷰 시 자동으로 저장할지 선택')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.autoSave)
-				.onChange(async (value) => {
-					this.plugin.settings.autoSave = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('리뷰 배치 크기')
-			.setDesc('한 번에 리뷰할 카드 수')
-			.addSlider(slider => slider
-				.setLimits(1, 50, 1)
-				.setValue(this.plugin.settings.reviewBatchSize)
-				.setDynamicTooltip()
-				.onChange(async (value) => {
-					this.plugin.settings.reviewBatchSize = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('모바일 전체 너비 모드')
-			.setDesc('카드 리뷰 모달을 전체 너비(100%)로 표시합니다 (모바일 환경에 유용)')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.mobileFullWidth)
-				.onChange(async (value) => {
-					this.plugin.settings.mobileFullWidth = value;
-					await this.plugin.saveSettings();
-					this.plugin.applyMobileFullWidth();
-				}));
+		// 기존 배지 제거
+		const existingBadge = icon.querySelector('.ribbon-badge');
+		if (existingBadge) {
+			existingBadge.remove();
+		}
+		
+		// 리뷰 대기 카드가 있으면 배지 추가
+		if (unreviewedCount > 0) {
+			const badge = icon.createEl('div', {
+				cls: 'ribbon-badge',
+				text: unreviewedCount.toString()
+			});
+			
+			// 배지 스타일 적용
+			badge.style.cssText = `
+				position: absolute;
+				top: -5px;
+				right: -5px;
+				background: var(--interactive-accent);
+				color: white;
+				border-radius: 50%;
+				width: 18px;
+				height: 18px;
+				font-size: 10px;
+				font-weight: bold;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 1;
+			`;
+		}
 	}
 }

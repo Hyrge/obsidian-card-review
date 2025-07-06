@@ -23,19 +23,24 @@ export function CardReviewModal({ cards, onKeep, onDiscard, component }: CardRev
 
   return (
     <div class="card-review-modal">
-      <h2>카드 리뷰</h2>
-      <div
-        class="card-text markdown-preview-view"
-        ref={mdRef}
-        style="margin-bottom: 15px;"
-      />
-      <div class="card-source">
-        <small>출처: {card.source}</small>
-        <small>생성일: {new Date(card.createdAt).toLocaleDateString()}</small>
+      <div class="card-review-header">
+        <h2>카드 리뷰</h2>
       </div>
-      <div class="card-review-buttons">
-        <button class="mod-warning" onClick={() => onDiscard(card.id)}>버리기</button>
-        <button class="mod-cta" onClick={() => onKeep(card.id)}>저장하기</button>
+      <div class="card-review-content">
+        <div
+          class="card-text markdown-preview-view"
+          ref={mdRef}
+        />
+        <div class="card-source">
+          <small>출처: {card.source}</small>
+          <small>생성일: {new Date(card.createdAt).toLocaleDateString()}</small>
+        </div>
+      </div>
+      <div class="card-review-footer">
+        <div class="card-review-buttons">
+          <button class="mod-warning" onClick={() => onDiscard(card.id)}>버리기</button>
+          <button class="mod-cta" onClick={() => onKeep(card.id)}>저장하기</button>
+        </div>
       </div>
     </div>
   );
