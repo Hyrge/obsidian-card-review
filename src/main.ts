@@ -1,4 +1,7 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, ButtonComponent } from 'obsidian';
+import { h, render } from 'preact';
+import { CardReviewModal } from './components/CardReviewModal';
+import { AllCardsView, ALL_CARDS_VIEW_TYPE } from './views/AllCardsView';
 
 // Remember to rename these classes and interfaces!
 
@@ -14,20 +17,28 @@ interface CardData {
 interface CardReviewSettings {
 	autoSave: boolean;
 	reviewBatchSize: number;
+	mobileFullWidth: boolean;
 }
 
 const DEFAULT_SETTINGS: CardReviewSettings = {
 	autoSave: true,
-	reviewBatchSize: 10
+	reviewBatchSize: 10,
+	mobileFullWidth: false
 }
 
 export default class CardReviewPlugin extends Plugin {
-	settings: CardReviewSettings;
+	settings!: CardReviewSettings;
 	cards: CardData[] = [];
 
 	async onload() {
 		await this.loadSettings();
 		await this.loadCards();
+		
+		// 모바일 전체 너비 모드 적용
+		this.applyMobileFullWidth();
+
+		// AllCardsView 등록
+		this.registerView(ALL_CARDS_VIEW_TYPE, (leaf) => new AllCardsView(leaf, this));
 
 		// 리본 아이콘 추가
 		this.addRibbonIcon('cards', '카드 리뷰', (evt: MouseEvent) => {
@@ -38,13 +49,17 @@ export default class CardReviewPlugin extends Plugin {
 		this.addCommand({
 			id: 'create-card-from-selection',
 			name: '선택한 텍스트를 카드로 만들기',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			editorCallback: (editor: Editor, ctx: MarkdownView | any) => {
 				const selection = editor.getSelection();
 				if (selection.trim().length === 0) {
 					new Notice('텍스트를 선택해주세요.');
 					return;
 				}
-				this.createCard(selection, view.file?.path || '알 수 없음');
+				if ('file' in ctx && ctx.file) {
+					this.createCard(selection, (ctx.file as TFile)?.path || '알 수 없음');
+				} else {
+					new Notice('마크다운 파일에서만 사용할 수 있습니다.');
+				}
 			}
 		});
 
@@ -62,7 +77,23 @@ export default class CardReviewPlugin extends Plugin {
 			id: 'view-all-cards',
 			name: '모든 카드 보기',
 			callback: () => {
-				new AllCardsModal(this.app, this).open();
+				this.openAllCardsView();
+			}
+		});
+
+		// 모든 카드 리셋 명령어
+		this.addCommand({
+			id: 'reset-all-cards',
+			name: '모든 카드 리셋 (다시 리뷰 대기 상태로)',
+			callback: async () => {
+				const reviewedCards = this.cards.filter(card => card.reviewed);
+				if (reviewedCards.length === 0) {
+					new Notice('리셋할 카드가 없습니다.');
+					return;
+				}
+				
+				await this.resetAllCards();
+				new Notice(`${reviewedCards.length}개의 카드가 리뷰 대기 상태로 리셋되었습니다.`);
 			}
 		});
 
@@ -97,17 +128,70 @@ export default class CardReviewPlugin extends Plugin {
 		await this.saveCards();
 		
 		new Notice(`카드가 생성되었습니다: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+		
+		// AllCardsView가 열려있으면 새로고침
+		this.refreshAllCardsView();
 	}
 
 	async startCardReview() {
 		const unreviewed = this.cards.filter(card => !card.reviewed);
 		
 		if (unreviewed.length === 0) {
-			new Notice('리뷰할 카드가 없습니다.');
+			// 리뷰할 카드가 없을 때, 리뷰 완료된 카드가 있는지 확인
+			const reviewedCards = this.cards.filter(card => card.reviewed);
+			
+			if (reviewedCards.length > 0) {
+				// 모든 카드를 리셋하여 다시 리뷰 가능하게 함
+				await this.resetAllCards();
+				new Notice('모든 카드 리뷰가 완료되었습니다! 다시 처음부터 리뷰를 시작합니다.');
+				
+				// 리셋 후 다시 리뷰 시작
+				const resetUnreviewed = this.cards.filter(card => !card.reviewed);
+				if (resetUnreviewed.length > 0) {
+					new PreactCardReviewModal(this.app, this, resetUnreviewed).open();
+				}
+			} else {
+				new Notice('리뷰할 카드가 없습니다.');
+			}
 			return;
 		}
 
-		new CardReviewModal(this.app, this, unreviewed).open();
+		new PreactCardReviewModal(this.app, this, unreviewed).open();
+	}
+
+	async resetAllCards() {
+		// 모든 저장된 카드의 reviewed 상태를 false로 리셋
+		this.cards.forEach(card => {
+			if (card.kept) {  // 저장된 카드만 리셋 (버려진 카드는 이미 삭제됨)
+				card.reviewed = false;
+			}
+		});
+		
+		await this.saveCards();
+		this.refreshAllCardsView();
+	}
+
+	async openAllCardsView() {
+		const existing = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
+		if (existing.length > 0) {
+			// 이미 열려있으면 해당 탭으로 이동
+			this.app.workspace.revealLeaf(existing[0]);
+		} else {
+			// 새로 열기
+			await this.app.workspace.getLeaf(true).setViewState({
+				type: ALL_CARDS_VIEW_TYPE,
+				active: true
+			});
+		}
+	}
+
+	refreshAllCardsView() {
+		const leaves = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
+		leaves.forEach(leaf => {
+			if (leaf.view instanceof AllCardsView) {
+				leaf.view.refresh();
+			}
+		});
 	}
 
 	async saveCard(cardId: string, keep: boolean) {
@@ -116,12 +200,14 @@ export default class CardReviewPlugin extends Plugin {
 			card.reviewed = true;
 			card.kept = keep;
 			await this.saveCards();
+			this.refreshAllCardsView();
 		}
 	}
 
 	async deleteCard(cardId: string) {
 		this.cards = this.cards.filter(c => c.id !== cardId);
 		await this.saveCards();
+		this.refreshAllCardsView();
 	}
 
 	async loadCards() {
@@ -140,13 +226,19 @@ export default class CardReviewPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+	applyMobileFullWidth() {
+		if (this.settings.mobileFullWidth) {
+			document.body.classList.add('mobile-full-width');
+		} else {
+			document.body.classList.remove('mobile-full-width');
+		}
+	}
 }
 
-class CardReviewModal extends Modal {
+class PreactCardReviewModal extends Modal {
 	plugin: CardReviewPlugin;
 	cards: CardData[];
-	currentIndex: number = 0;
-	keptCards: number = 0;
 
 	constructor(app: App, plugin: CardReviewPlugin, cards: CardData[]) {
 		super(app);
@@ -155,134 +247,45 @@ class CardReviewModal extends Modal {
 	}
 
 	onOpen() {
-		this.displayCurrentCard();
-	}
-
-	displayCurrentCard() {
 		const { contentEl } = this;
-		contentEl.empty();
-
-		if (this.currentIndex >= this.cards.length) {
-			this.displayComplete();
-			return;
-		}
-
-		const card = this.cards[this.currentIndex];
-		
-		contentEl.createEl('h2', { text: '카드 리뷰' });
-		contentEl.createEl('p', { text: `${this.currentIndex + 1} / ${this.cards.length}` });
-		
-		const cardContainer = contentEl.createEl('div', { cls: 'card-review-container' });
-		const cardText = cardContainer.createEl('div', { cls: 'card-text' });
-		cardText.createEl('p', { text: card.text });
-		
-		const sourceInfo = cardContainer.createEl('div', { cls: 'card-source' });
-		sourceInfo.createEl('small', { text: `출처: ${card.source}` });
-		sourceInfo.createEl('small', { text: `생성일: ${new Date(card.createdAt).toLocaleDateString()}` });
-
-		const buttonContainer = contentEl.createEl('div', { cls: 'card-review-buttons' });
-		
-		const discardBtn = new ButtonComponent(buttonContainer);
-		discardBtn.setButtonText('버리기')
-			.setClass('mod-warning')
-			.onClick(() => this.handleCardDecision(false));
-
-		const keepBtn = new ButtonComponent(buttonContainer);
-		keepBtn.setButtonText('저장하기')
-			.setClass('mod-cta')
-			.onClick(() => this.handleCardDecision(true));
-
-		// 키보드 단축키
-		this.scope.register([], 'ArrowLeft', () => this.handleCardDecision(false));
-		this.scope.register([], 'ArrowRight', () => this.handleCardDecision(true));
-		this.scope.register([], 'Space', () => this.handleCardDecision(true));
-	}
-
-	async handleCardDecision(keep: boolean) {
-		const card = this.cards[this.currentIndex];
-		if (keep) {
-			await this.plugin.saveCard(card.id, true);
-			this.keptCards++;
-		} else {
-			await this.plugin.deleteCard(card.id); // 완전 삭제
-			this.cards.splice(this.currentIndex, 1); // 현재 모달의 배열에서도 즉시 제거
-			this.currentIndex--; // 인덱스 보정
-		}
-		this.currentIndex++;
-		this.displayCurrentCard();
-	}
-
-	displayComplete() {
-		const { contentEl } = this;
-		contentEl.empty();
-		contentEl.createEl('h2', { text: '리뷰 완료!' });
-		contentEl.createEl('p', { text: '모든 카드 리뷰가 완료되었습니다.' });
-		contentEl.createEl('p', { text: `저장된 카드: ${this.keptCards}개` });
-		const closeBtn = new ButtonComponent(contentEl);
-		closeBtn.setButtonText('닫기')
-			.setClass('mod-cta')
-			.onClick(() => this.close());
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
-}
-
-class AllCardsModal extends Modal {
-	plugin: CardReviewPlugin;
-
-	constructor(app: App, plugin: CardReviewPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
-
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.empty();
-
-		contentEl.createEl('h2', { text: '모든 카드' });
-
-		const stats = contentEl.createEl('div', { cls: 'card-stats' });
-		const total = this.plugin.cards.length;
-		const reviewed = this.plugin.cards.filter(c => c.reviewed).length;
-		const unreviewed = this.plugin.cards.filter(c => !c.reviewed).length;
-
-		stats.createEl('p', { text: `총 카드: ${total}개` });
-		stats.createEl('p', { text: `저장된 카드: ${reviewed}개` });
-		stats.createEl('p', { text: `리뷰 대기: ${unreviewed}개` });
-
-		const cardsList = contentEl.createEl('div', { cls: 'cards-list' });
-		this.plugin.cards.forEach(card => {
-			const cardEl = cardsList.createEl('div', { cls: 'card-item' });
-			const cardContent = cardEl.createEl('div', { cls: 'card-content' });
-			cardContent.createEl('p', { text: card.text });
-			const cardMeta = cardContent.createEl('div', { cls: 'card-meta' });
-			cardMeta.createEl('small', { text: `출처: ${card.source}` });
-			cardMeta.createEl('small', { text: `생성일: ${new Date(card.createdAt).toLocaleDateString()}` });
-			const cardStatus = cardEl.createEl('div', { cls: 'card-status' });
-			if (card.reviewed) {
-				cardStatus.createEl('span', { text: '저장됨', cls: 'status-kept' });
+		const handleKeep = async (id: string) => {
+			await this.plugin.saveCard(id, true);
+			this.cards = this.cards.filter(card => card.id !== id);
+			if (this.cards.length === 0) {
+				this.close();
 			} else {
-				cardStatus.createEl('span', { text: '리뷰 대기', cls: 'status-pending' });
+				this.rerender();
 			}
-			const deleteBtn = new ButtonComponent(cardEl);
-			deleteBtn.setButtonText('삭제')
-				.setClass('mod-warning')
-				.onClick(() => this.deleteCard(card.id));
-		});
-	}
-
-	async deleteCard(cardId: string) {
-		await this.plugin.deleteCard(cardId);
-		this.onOpen(); // 목록 새로고침
+		};
+		const handleDiscard = async (id: string) => {
+			await this.plugin.deleteCard(id);
+			this.cards = this.cards.filter(card => card.id !== id);
+			if (this.cards.length === 0) {
+				this.close();
+			} else {
+				this.rerender();
+			}
+		};
+		this.rerender = () => {
+			contentEl.empty();
+			render(
+				h(CardReviewModal, {
+					cards: this.cards,
+					onKeep: handleKeep,
+					onDiscard: handleDiscard,
+					component: this.plugin
+				}),
+				contentEl
+			);
+		};
+		this.rerender();
 	}
 
 	onClose() {
 		const { contentEl } = this;
 		contentEl.empty();
 	}
+	private rerender: () => void = () => {};
 }
 
 class CardReviewSettingTab extends PluginSettingTab {
@@ -319,6 +322,17 @@ class CardReviewSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.reviewBatchSize = value;
 					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('모바일 전체 너비 모드')
+			.setDesc('카드 리뷰 모달을 전체 너비(100%)로 표시합니다 (모바일 환경에 유용)')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.mobileFullWidth)
+				.onChange(async (value) => {
+					this.plugin.settings.mobileFullWidth = value;
+					await this.plugin.saveSettings();
+					this.plugin.applyMobileFullWidth();
 				}));
 	}
 }

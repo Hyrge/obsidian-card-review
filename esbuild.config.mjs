@@ -1,7 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync } from "fs";
 
 const banner =
 `/*
@@ -42,6 +42,12 @@ const context = await esbuild.context({
 	outfile: prod ? "build/main.js" : "main.js",
 	minify: prod,
 	platform: "node",
+	jsx: "automatic",
+	jsxImportSource: "preact",
+	alias: {
+		"react": "preact/compat",
+		"react-dom": "preact/compat"
+	}
 });
 
 // 빌드 후 파일 복사 함수
@@ -62,18 +68,6 @@ function copyFilesToBuild() {
 		copyFileSync("src/styles.css", "build/styles.css");
 		console.log("✅ styles.css copied to build/");
 	}
-
-	// data.json 생성 (빈 데이터 파일)
-	const defaultData = {
-		cards: [],
-		settings: {
-			autoSave: true,
-			reviewBatchSize: 10
-		}
-	};
-	
-	writeFileSync("build/data.json", JSON.stringify(defaultData, null, 2));
-	console.log("✅ data.json created in build/");
 }
 
 // 플러그인 폴더로 파일 복사 함수
@@ -85,7 +79,7 @@ function copyToPluginFolder() {
 	}
 
 	// build 폴더의 모든 파일을 플러그인 폴더로 복사
-	const filesToCopy = ["main.js", "manifest.json", "styles.css", "data.json"];
+	const filesToCopy = ["main.js", "manifest.json", "styles.css"];
 	
 	filesToCopy.forEach(file => {
 		const sourcePath = `build/${file}`;
@@ -110,7 +104,6 @@ if (prod) {
 	console.log("   - main.js");
 	console.log("   - manifest.json");
 	console.log("   - styles.css");
-	console.log("   - data.json");
 	process.exit(0);
 } else {
 	await context.watch();
