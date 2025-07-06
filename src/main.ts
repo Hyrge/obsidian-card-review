@@ -267,7 +267,14 @@ export default class CardReviewPlugin extends Plugin {
 	private getUnreviewedCards(): CardData[] {
 		const now = Date.now();
 		if (this.unreviewedCache.length === 0 || now - this.cacheTimestamp > this.CACHE_DURATION) {
-			this.unreviewedCache = this.cards.filter(card => !card.reviewed);
+			let unreviewed = this.cards.filter(card => !card.reviewed);
+			
+			// 랜덤 모드가 활성화되어 있으면 카드를 섞기
+			if (this.settings.randomMode) {
+				unreviewed = this.shuffleArray([...unreviewed]);
+			}
+			
+			this.unreviewedCache = unreviewed;
 			this.cacheTimestamp = now;
 		}
 		return this.unreviewedCache;
@@ -291,6 +298,16 @@ export default class CardReviewPlugin extends Plugin {
 
 	getTotalPages(itemsPerPage: number = 50): number {
 		return Math.ceil(this.cards.length / itemsPerPage);
+	}
+
+	// 배열을 랜덤하게 섞는 메서드 (Fisher-Yates 알고리즘)
+	private shuffleArray<T>(array: T[]): T[] {
+		const shuffled = [...array];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
 	}
 
 	// 리본 아이콘 배지 업데이트

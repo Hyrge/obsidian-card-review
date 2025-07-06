@@ -11,6 +11,7 @@ export interface CardReviewSettings {
 	autoSave: boolean;
 	reviewBatchSize: number;
 	mobileFullWidth: boolean;
+	randomMode: boolean;
 }
 
 export interface CardPage {
@@ -23,7 +24,8 @@ export interface CardPage {
 export const DEFAULT_SETTINGS: CardReviewSettings = {
 	autoSave: true,
 	reviewBatchSize: 10,
-	mobileFullWidth: false
+	mobileFullWidth: false,
+	randomMode: false
 };
 
 // 카드 목록을 페이지 단위로 로드

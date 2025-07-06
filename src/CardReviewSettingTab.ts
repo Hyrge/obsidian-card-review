@@ -38,6 +38,16 @@ export class CardReviewSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('랜덤 모드')
+			.setDesc('카드 리뷰 시 카드를 랜덤 순서로 표시합니다')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.randomMode)
+				.onChange(async (value) => {
+					this.plugin.settings.randomMode = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('모바일 전체 너비 모드')
 			.setDesc('카드 리뷰 모달을 전체 너비(100%)로 표시합니다 (모바일 환경에 유용)')
 			.addToggle(toggle => toggle
