@@ -7,6 +7,8 @@ export const ALL_CARDS_VIEW_TYPE = 'all-cards-view';
 
 export class AllCardsView extends ItemView {
   plugin: CardReviewPlugin;
+  private currentPage: number = 0;
+  private readonly itemsPerPage: number = 50;
 
   constructor(leaf: WorkspaceLeaf, plugin: CardReviewPlugin) {
     super(leaf);
@@ -51,11 +53,23 @@ export class AllCardsView extends ItemView {
       this.renderCards(); // 목록 새로고침
     };
 
+    const handlePageChange = (page: number) => {
+      this.currentPage = page;
+      this.renderCards();
+    };
+
+    // 현재 페이지의 카드들만 가져오기
+    const currentCards = this.plugin.getCardsByPage(this.currentPage, this.itemsPerPage);
+    const totalPages = this.plugin.getTotalPages(this.itemsPerPage);
+
     render(
       h(AllCardsComponent, {
-        cards: this.plugin.cards,
+        cards: currentCards,
         onDeleteCard: handleDeleteCard,
         onResetAllCards: handleResetAllCards,
+        onPageChange: handlePageChange,
+        currentPage: this.currentPage,
+        totalPages: totalPages,
         app: this.app,
         plugin: this.plugin
       }),

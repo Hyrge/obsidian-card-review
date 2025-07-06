@@ -26,9 +26,27 @@ const DEFAULT_SETTINGS: CardReviewSettings = {
 	mobileFullWidth: false
 }
 
+// 카드 목록을 페이지 단위로 로드
+interface CardPage {
+	page: number;
+	cards: CardData[];
+	total: number;
+	hasMore: boolean;
+}
+
+// 모든 카드 보기에서 20개씩만 렌더링
+const ITEMS_PER_PAGE = 20;
+
 export default class CardReviewPlugin extends Plugin {
 	settings!: CardReviewSettings;
 	cards: CardData[] = [];
+	
+	// 캐시 시스템
+	private unreviewedCache: CardData[] = [];
+	private allCardsCache: CardData[] = [];
+	private cacheTimestamp: number = 0;
+	private readonly CACHE_DURATION = 5000; // 5초
+	unreviewedCards: CardData[] = [];
 
 	async onload() {
 		await this.loadSettings();
@@ -125,6 +143,7 @@ export default class CardReviewPlugin extends Plugin {
 		};
 
 		this.cards.push(card);
+		this.invalidateCache(); // 캐시 무효화
 		await this.saveCards();
 		
 		new Notice(`카드가 생성되었습니다: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
@@ -134,9 +153,7 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	async startCardReview() {
-		const unreviewed = this.cards.filter(card => !card.reviewed);
-		
-		if (unreviewed.length === 0) {
+		if (this.unreviewedCards.length === 0) {
 			// 리뷰할 카드가 없을 때, 리뷰 완료된 카드가 있는지 확인
 			const reviewedCards = this.cards.filter(card => card.reviewed);
 			
@@ -148,7 +165,8 @@ export default class CardReviewPlugin extends Plugin {
 				// 리셋 후 다시 리뷰 시작
 				const resetUnreviewed = this.cards.filter(card => !card.reviewed);
 				if (resetUnreviewed.length > 0) {
-					new PreactCardReviewModal(this.app, this, resetUnreviewed).open();
+					this.unreviewedCards = resetUnreviewed;
+					new PreactCardReviewModal(this.app, this, this.unreviewedCards).open();
 				}
 			} else {
 				new Notice('리뷰할 카드가 없습니다.');
@@ -156,7 +174,7 @@ export default class CardReviewPlugin extends Plugin {
 			return;
 		}
 
-		new PreactCardReviewModal(this.app, this, unreviewed).open();
+		new PreactCardReviewModal(this.app, this, this.unreviewedCards).open();
 	}
 
 	async resetAllCards() {
@@ -199,6 +217,7 @@ export default class CardReviewPlugin extends Plugin {
 		if (card) {
 			card.reviewed = true;
 			card.kept = keep;
+			this.invalidateCache(); // 캐시 무효화
 			await this.saveCards();
 			this.refreshAllCardsView();
 		}
@@ -206,6 +225,7 @@ export default class CardReviewPlugin extends Plugin {
 
 	async deleteCard(cardId: string) {
 		this.cards = this.cards.filter(c => c.id !== cardId);
+		this.invalidateCache(); // 캐시 무효화
 		await this.saveCards();
 		this.refreshAllCardsView();
 	}
@@ -213,6 +233,7 @@ export default class CardReviewPlugin extends Plugin {
 	async loadCards() {
 		const data = await this.loadData();
 		this.cards = data?.cards || [];
+		this.invalidateCache();
 	}
 
 	async saveCards() {
@@ -234,6 +255,42 @@ export default class CardReviewPlugin extends Plugin {
 			document.body.classList.remove('mobile-full-width');
 		}
 	}
+
+	// 캐시 관리 메서드들
+	private invalidateCache() {
+		this.unreviewedCache = [];
+		this.allCardsCache = [];
+		this.cacheTimestamp = 0;
+	}
+
+	private getUnreviewedCards(): CardData[] {
+		const now = Date.now();
+		if (this.unreviewedCache.length === 0 || now - this.cacheTimestamp > this.CACHE_DURATION) {
+			this.unreviewedCache = this.cards.filter(card => !card.reviewed);
+			this.cacheTimestamp = now;
+		}
+		return this.unreviewedCache;
+	}
+
+	private getAllCards(): CardData[] {
+		const now = Date.now();
+		if (this.allCardsCache.length === 0 || now - this.cacheTimestamp > this.CACHE_DURATION) {
+			this.allCardsCache = [...this.cards];
+			this.cacheTimestamp = now;
+		}
+		return this.allCardsCache;
+	}
+
+	// 페이지네이션 메서드
+	getCardsByPage(page: number, itemsPerPage: number = 50): CardData[] {
+		const allCards = this.getAllCards();
+		const start = page * itemsPerPage;
+		return allCards.slice(start, start + itemsPerPage);
+	}
+
+	getTotalPages(itemsPerPage: number = 50): number {
+		return Math.ceil(this.cards.length / itemsPerPage);
+	}
 }
 
 class PreactCardReviewModal extends Modal {
@@ -248,28 +305,43 @@ class PreactCardReviewModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		const handleKeep = async (id: string) => {
-			await this.plugin.saveCard(id, true);
+		const handleKeep = (id: string) => {
+			// UI 먼저 업데이트 (즉시 반응)
 			this.cards = this.cards.filter(card => card.id !== id);
+			
 			if (this.cards.length === 0) {
 				this.close();
 			} else {
 				this.rerender();
 			}
+			
+			// 데이터 저장은 백그라운드에서 처리
+			this.plugin.saveCard(id, true).catch(error => {
+				console.error('카드 저장 중 오류:', error);
+			});
 		};
-		const handleDiscard = async (id: string) => {
-			await this.plugin.deleteCard(id);
+		
+		const handleDiscard = (id: string) => {
+			// UI 먼저 업데이트 (즉시 반응)
 			this.cards = this.cards.filter(card => card.id !== id);
+			
 			if (this.cards.length === 0) {
 				this.close();
 			} else {
 				this.rerender();
 			}
+			
+			// 데이터 삭제는 백그라운드에서 처리
+			this.plugin.deleteCard(id).catch(error => {
+				console.error('카드 삭제 중 오류:', error);
+			});
 		};
+		
 		this.rerender = () => {
 			contentEl.empty();
 			render(
 				h(CardReviewModal, {
+					key: this.cards.length > 0 ? this.cards[0].id : 'no-cards',
 					cards: this.cards,
 					onKeep: handleKeep,
 					onDiscard: handleDiscard,
@@ -295,7 +367,7 @@ class CardReviewSettingTab extends PluginSettingTab {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
-
+	
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();

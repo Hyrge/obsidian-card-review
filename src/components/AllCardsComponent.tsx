@@ -15,6 +15,9 @@ interface AllCardsComponentProps {
   cards: CardData[];
   onDeleteCard: (id: string) => void;
   onResetAllCards: () => void;
+  onPageChange: (page: number) => void;
+  currentPage: number;
+  totalPages: number;
   app: App;
   plugin: Component;
 }
@@ -60,7 +63,16 @@ function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: s
   );
 }
 
-export function AllCardsComponent({ cards, onDeleteCard, onResetAllCards, app, plugin }: AllCardsComponentProps) {
+export function AllCardsComponent({ 
+  cards, 
+  onDeleteCard, 
+  onResetAllCards, 
+  onPageChange,
+  currentPage,
+  totalPages,
+  app, 
+  plugin 
+}: AllCardsComponentProps) {
   const total = cards.length;
   const reviewed = cards.filter(c => c.reviewed).length;
   const unreviewed = cards.filter(c => !c.reviewed).length;
@@ -102,14 +114,39 @@ export function AllCardsComponent({ cards, onDeleteCard, onResetAllCards, app, p
             <p>텍스트를 선택하고 "선택한 텍스트를 카드로 만들기" 명령을 사용해보세요.</p>
           </div>
         ) : (
-          cards.map(card => (
-            <CardItem 
-              key={card.id} 
-              card={card} 
-              onDelete={onDeleteCard} 
-              plugin={plugin} 
-            />
-          ))
+          <>
+            {cards.map(card => (
+              <CardItem 
+                key={card.id} 
+                card={card} 
+                onDelete={onDeleteCard} 
+                plugin={plugin} 
+              />
+            ))}
+            
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div class="pagination">
+                <button 
+                  class="pagination-btn"
+                  disabled={currentPage === 0}
+                  onClick={() => onPageChange(currentPage - 1)}
+                >
+                  이전
+                </button>
+                <span class="pagination-info">
+                  {currentPage + 1} / {totalPages}
+                </span>
+                <button 
+                  class="pagination-btn"
+                  disabled={currentPage === totalPages - 1}
+                  onClick={() => onPageChange(currentPage + 1)}
+                >
+                  다음
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

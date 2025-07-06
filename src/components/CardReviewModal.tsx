@@ -19,7 +19,7 @@ export function CardReviewModal({ cards, onKeep, onDiscard, component }: CardRev
       mdRef.current.innerHTML = '';
       MarkdownRenderer.renderMarkdown(card.text, mdRef.current, '', component);
     }
-  }, [card.id, card.text]);
+  }, [card.id, card.text, component]);
 
   return (
     <div class="card-review-modal">
