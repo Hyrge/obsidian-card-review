@@ -1,94 +1,104 @@
-# Obsidian Sample Plugin
+# 카드 리뷰 플러그인 (Card Review Plugin)
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Obsidian용 카드 리뷰 플러그인으로, 선택한 텍스트를 카드로 만들고 Readwise와 비슷한 방식으로 리뷰할 수 있습니다.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## 🎯 주요 기능
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+- **텍스트 선택 → 카드 생성**: 문서에서 중요한 텍스트를 선택하여 카드로 저장
+- **카드 리뷰 시스템**: 저장된 카드들을 하나씩 리뷰하며 저장하거나 버리기 결정
+- **키보드 단축키**: 빠른 리뷰를 위한 키보드 단축키 지원
+- **카드 관리**: 모든 카드를 한 번에 보고 관리할 수 있는 인터페이스
 
-## First time developing plugins?
+## 📝 사용법
 
-Quick starting guide for new plugin devs:
+### 1. 카드 만들기
+1. 문서에서 카드로 만들고 싶은 텍스트를 선택
+2. 명령어 팔레트(`Ctrl+P`)에서 "선택한 텍스트를 카드로 만들기" 실행
+3. 선택한 텍스트가 카드로 저장됨
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+### 2. 카드 리뷰하기
+1. 명령어 팔레트(`Ctrl+P`)에서 "카드 리뷰" 실행
+2. 또는 좌측 리본에서 카드 아이콘 클릭
+3. 카드가 하나씩 표시되며, 각 카드에 대해 선택:
+   - **저장하기**: 유용한 카드로 저장
+   - **버리기**: 불필요한 카드로 분류
 
-## Releasing new releases
+### 3. 키보드 단축키
+- `←` (왼쪽 화살표): 카드 버리기
+- `→` (오른쪽 화살표): 카드 저장하기
+- `Space`: 카드 저장하기
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+### 4. 모든 카드 보기
+- 명령어 팔레트에서 "모든 카드 보기" 실행
+- 카드 통계 확인 및 개별 카드 삭제 가능
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+## ⚙️ 설정
 
-## Adding your plugin to the community plugin list
+플러그인 설정에서 다음 옵션을 조정할 수 있습니다:
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+- **자동 저장**: 카드 리뷰 시 자동으로 저장 여부
+- **리뷰 배치 크기**: 한 번에 리뷰할 카드 수 (1-50개)
 
-## How to use
+## 🔧 개발 및 빌드
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+### 개발 환경 설정
+```bash
+bun install
 ```
 
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+### 개발 모드 실행
+```bash
+bun run dev
 ```
 
-## API Documentation
+### 프로덕션 빌드
+```bash
+bun run build
+```
 
-See https://github.com/obsidianmd/obsidian-api
+### 배포 (빌드 + 플러그인 폴더 복사)
+```bash
+bun run deploy
+```
+
+빌드 완료 후 `build/` 폴더에 다음 파일들이 생성됩니다:
+- `main.js` - 메인 플러그인 코드
+- `manifest.json` - 플러그인 정보
+- `styles.css` - 스타일 시트
+- `data.json` - 기본 데이터 파일
+
+## 📁 프로젝트 구조
+
+```
+obsidian-card-review-plugin/
+├── src/
+│   ├── main.ts          # 메인 플러그인 코드
+│   └── styles.css       # 스타일 시트
+├── build/               # 빌드 결과물 (자동 생성)
+├── manifest.json        # 플러그인 정보
+├── package.json         # 프로젝트 설정
+├── esbuild.config.mjs   # 빌드 설정
+└── README.md           # 프로젝트 문서
+```
+
+## 📦 설치 방법
+
+1. 릴리즈에서 최신 버전 다운로드
+2. Obsidian 볼트의 `.obsidian/plugins/card-review-plugin/` 폴더에 파일 복사
+3. Obsidian에서 플러그인 활성화
+
+## 🎨 스타일 커스터마이징
+
+`styles.css` 파일을 수정하여 카드 리뷰 인터페이스의 외관을 커스터마이징할 수 있습니다.
+
+## 📄 라이선스
+
+MIT License
+
+## 🤝 기여하기
+
+이슈 제보나 기능 제안은 GitHub Issues를 통해 해주세요.
+
+---
+
+💡 **팁**: 이 플러그인은 Readwise의 리뷰 방식에서 영감을 받았습니다. 중요한 정보를 카드로 만들고 정기적으로 리뷰하여 기억에 오래 남도록 도와줍니다.

@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
 
 const banner =
 `/*
@@ -10,12 +11,13 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+const PLUGIN_PATH = "D:\\WS2\\plug-in\\.obsidian\\plugins\\card";
 
 const context = await esbuild.context({
 	banner: {
 		js: banner,
 	},
-	entryPoints: ["main.ts"],
+	entryPoints: ["src/main.ts"],
 	bundle: true,
 	external: [
 		"obsidian",
@@ -33,16 +35,82 @@ const context = await esbuild.context({
 		"@lezer/lr",
 		...builtins],
 	format: "cjs",
-	target: "es2018",
+	target: "es2020",
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: prod ? "build/main.js" : "main.js",
 	minify: prod,
+	platform: "node",
 });
+
+// 빌드 후 파일 복사 함수
+function copyFilesToBuild() {
+	// build 폴더 생성
+	if (!existsSync("build")) {
+		mkdirSync("build");
+	}
+
+	// manifest.json 복사
+	if (existsSync("manifest.json")) {
+		copyFileSync("manifest.json", "build/manifest.json");
+		console.log("✅ manifest.json copied to build/");
+	}
+
+	// styles.css 복사
+	if (existsSync("src/styles.css")) {
+		copyFileSync("src/styles.css", "build/styles.css");
+		console.log("✅ styles.css copied to build/");
+	}
+
+	// data.json 생성 (빈 데이터 파일)
+	const defaultData = {
+		cards: [],
+		settings: {
+			autoSave: true,
+			reviewBatchSize: 10
+		}
+	};
+	
+	writeFileSync("build/data.json", JSON.stringify(defaultData, null, 2));
+	console.log("✅ data.json created in build/");
+}
+
+// 플러그인 폴더로 파일 복사 함수
+function copyToPluginFolder() {
+	// 플러그인 폴더가 없으면 생성
+	if (!existsSync(PLUGIN_PATH)) {
+		mkdirSync(PLUGIN_PATH, { recursive: true });
+		console.log(`📁 Created plugin folder: ${PLUGIN_PATH}`);
+	}
+
+	// build 폴더의 모든 파일을 플러그인 폴더로 복사
+	const filesToCopy = ["main.js", "manifest.json", "styles.css", "data.json"];
+	
+	filesToCopy.forEach(file => {
+		const sourcePath = `build/${file}`;
+		const targetPath = `${PLUGIN_PATH}/${file}`;
+		
+		if (existsSync(sourcePath)) {
+			copyFileSync(sourcePath, targetPath);
+			console.log(`✅ ${file} copied to plugin folder`);
+		} else {
+			console.log(`⚠️  ${file} not found in build folder`);
+		}
+	});
+	
+	console.log(`🎉 All files copied to: ${PLUGIN_PATH}`);
+}
 
 if (prod) {
 	await context.rebuild();
+	copyFilesToBuild();
+	copyToPluginFolder();
+	console.log("🎉 Build completed! Files generated in build/ folder and copied to plugin folder:");
+	console.log("   - main.js");
+	console.log("   - manifest.json");
+	console.log("   - styles.css");
+	console.log("   - data.json");
 	process.exit(0);
 } else {
 	await context.watch();
