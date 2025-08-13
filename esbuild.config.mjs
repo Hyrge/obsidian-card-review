@@ -64,8 +64,8 @@ function copyFilesToBuild() {
 	}
 
 	// styles.css 복사
-	if (existsSync("src/styles.css")) {
-		copyFileSync("src/styles.css", "build/styles.css");
+	if (existsSync("styles.css")) {
+		copyFileSync("styles.css", "build/styles.css");
 		console.log("✅ styles.css copied to build/");
 	}
 }

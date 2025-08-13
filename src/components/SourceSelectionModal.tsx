@@ -61,9 +61,7 @@ export function SourceSelectionModal({ cards, onStartReview, onClose }: SourceSe
             <h3>폴더 선택</h3>
             <div class="directory-grid">
               <div class="directory-tile all-cards" onClick={() => onStartReview(cards)}>
-                <div class="directory-icon" aria-hidden>📚</div>
                 <div class="directory-title">모든 카드</div>
-                <div class="directory-count">{cards.length}개</div>
               </div>
               {Object.entries(directories).map(([directory, dirCards]) => (
                 <div
@@ -71,9 +69,7 @@ export function SourceSelectionModal({ cards, onStartReview, onClose }: SourceSe
                   class="directory-tile"
                   onClick={() => handleDirectorySelect(directory)}
                 >
-                  <div class="directory-icon" aria-hidden>📁</div>
                   <div class="directory-title">{directory}</div>
-                  <div class="directory-count">{dirCards.length}개</div>
                 </div>
               ))}
             </div>
