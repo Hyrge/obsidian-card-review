@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { h, render } from 'preact';
 import { AllCardsComponent } from '../components/AllCardsComponent';
+import { ITEMS_PER_PAGE } from '../types';
 import type CardReviewPlugin from '../main';
 
 export const ALL_CARDS_VIEW_TYPE = 'all-cards-view';
@@ -8,8 +9,7 @@ export const ALL_CARDS_VIEW_TYPE = 'all-cards-view';
 export class AllCardsView extends ItemView {
   plugin: CardReviewPlugin;
   private currentPage: number = 0;
-  private readonly itemsPerPage: number = 50;
-  private refreshInterval: number | null = null;
+  private readonly itemsPerPage: number = ITEMS_PER_PAGE;
   private isRendering: boolean = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: CardReviewPlugin) {
@@ -31,21 +31,10 @@ export class AllCardsView extends ItemView {
 
   async onOpen() {
     this.renderCards();
-    
-    // 자동 새로고침 타이머 시작 (5초마다)
-    this.refreshInterval = window.setInterval(() => {
-      if (!this.isRendering) {
-        this.refresh();
-      }
-    }, 5000);
   }
 
   async onClose() {
-    // 자동 새로고침 타이머 정리
-    if (this.refreshInterval) {
-      window.clearInterval(this.refreshInterval);
-      this.refreshInterval = null;
-    }
+    // 현재는 폴링을 사용하지 않음
   }
 
   renderCards() {
@@ -57,7 +46,6 @@ export class AllCardsView extends ItemView {
     
     try {
       const container = this.containerEl.children[1];
-      container.empty();
 
     const handleDeleteCard = async (cardId: string) => {
       try {
@@ -69,7 +57,7 @@ export class AllCardsView extends ItemView {
           this.currentPage--;
         }
         
-        this.renderCards(); // 목록 새로고침
+        this.renderCards(); // 목록 새로고침 (페이지 조정 후 반영)
       } catch (error) {
         console.error('카드 삭제 중 오류:', error);
       }

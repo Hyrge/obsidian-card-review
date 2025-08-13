@@ -433,7 +433,8 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	getTotalPages(itemsPerPage: number = 50): number {
-		return Math.ceil(this.cards.length / itemsPerPage);
+		const total = this.getAllCards().length;
+		return Math.max(1, Math.ceil(total / itemsPerPage));
 	}
 
 	// 배열을 랜덤하게 섞는 메서드 (Fisher-Yates 알고리즘)
