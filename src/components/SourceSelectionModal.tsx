@@ -52,27 +52,27 @@ export function SourceSelectionModal({ cards, onStartReview, onClose }: SourceSe
     <div class="source-selection-modal">
       <div class="source-selection-header">
         <h2>리뷰할 카드 선택</h2>
-        <button class="modal-close-button" onClick={onClose}>×</button>
+        <button class="start-all-button" onClick={() => onStartReview(cards)}>모든 카드 리뷰</button>
       </div>
 
       <div class="source-selection-content">
         {!selectedDirectory ? (
           <div class="directory-selection">
             <h3>폴더 선택</h3>
-            <div class="directory-list">
-              <div class="directory-item all-cards" onClick={() => onStartReview(cards)}>
-                <div class="directory-name">📚 모든 카드</div>
+            <div class="directory-grid">
+              <div class="directory-tile all-cards" onClick={() => onStartReview(cards)}>
+                <div class="directory-icon" aria-hidden>📚</div>
+                <div class="directory-title">모든 카드</div>
                 <div class="directory-count">{cards.length}개</div>
               </div>
               {Object.entries(directories).map(([directory, dirCards]) => (
-                <div 
-                  key={directory} 
-                  class="directory-item"
+                <div
+                  key={directory}
+                  class="directory-tile"
                   onClick={() => handleDirectorySelect(directory)}
                 >
-                  <div class="directory-name">
-                    📁 {directory}
-                  </div>
+                  <div class="directory-icon" aria-hidden>📁</div>
+                  <div class="directory-title">{directory}</div>
                   <div class="directory-count">{dirCards.length}개</div>
                 </div>
               ))}

@@ -75,18 +75,19 @@
 	margin: 0;
 }
 
-.modal-close-button {
-	background: none;
+/* 상단 우측 전체 리뷰 버튼 */
+.start-all-button {
+	background: var(--interactive-accent);
+	color: white;
 	border: none;
-	font-size: 20px;
+	padding: 8px 12px;
+	border-radius: 6px;
 	cursor: pointer;
-	color: var(--text-muted);
-	padding: 5px;
-	border-radius: 3px;
+	font-weight: 600;
 }
 
-.modal-close-button:hover {
-	background: var(--background-modifier-hover);
+.start-all-button:hover {
+	background: var(--interactive-accent-hover);
 }
 
 .source-selection-content {
@@ -199,6 +200,53 @@
 
 .source-selection-footer button:hover {
 	background: var(--background-modifier-hover);
+}
+
+/* 폴더 그리드(정사각형 타일) */
+.directory-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	gap: 12px;
+}
+
+.directory-tile {
+	position: relative;
+	background: var(--background-secondary);
+	border: 2px solid transparent;
+	border-radius: 10px;
+	height: 120px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.directory-tile:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+.directory-tile.all-cards {
+	background: var(--interactive-accent);
+	color: white;
+}
+
+.directory-tile.all-cards .directory-count {
+	background: rgba(255,255,255,0.2);
+	color: #fff;
+}
+
+.directory-icon {
+	font-size: 28px;
+	margin-bottom: 8px;
+}
+
+.directory-title {
+	font-weight: 600;
+	text-align: center;
+	margin-bottom: 6px;
 }
 
 /* 모든 카드 보기 스타일 */
