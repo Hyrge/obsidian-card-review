@@ -2,6 +2,7 @@ export interface CardData {
 	id: string;
 	text: string;
 	source: string;
+	directory: string;
 	createdAt: number;
 	reviewed: boolean;
 	kept: boolean;
@@ -12,6 +13,13 @@ export interface CardReviewSettings {
 	reviewBatchSize: number;
 	mobileFullWidth: boolean;
 	randomMode: boolean;
+}
+
+export interface CurrentDeck {
+	selectedSource?: string;
+	selectedDirectory?: string;
+	cards: CardData[];
+	currentIndex: number;
 }
 
 export interface CardPage {

@@ -1,23 +1,28 @@
 import { App, Editor, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import { AllCardsView, ALL_CARDS_VIEW_TYPE } from './views/AllCardsView';
 import { PreactCardReviewModal } from './PreactCardReviewModal';
+import { PreactSourceSelectionModal } from './PreactSourceSelectionModal';
 import { CardReviewSettingTab } from './CardReviewSettingTab';
-import type { CardData, CardReviewSettings } from './types';
+import type { CardData, CardReviewSettings, CurrentDeck } from './types';
 import { DEFAULT_SETTINGS } from './types';
 
 export default class CardReviewPlugin extends Plugin {
 	settings!: CardReviewSettings;
 	cards: CardData[] = [];
+	currentDeck: CurrentDeck | null = null;
 	
 	// 캐시 시스템
 	private unreviewedCache: CardData[] = [];
 	private allCardsCache: CardData[] = [];
+	private currentDeckCache: CurrentDeck | null = null;
 	private cacheTimestamp: number = 0;
+	private deckCacheTimestamp: number = 0;
 	private readonly CACHE_DURATION = 5000; // 5초
 
 	async onload() {
 		await this.loadSettings();
 		await this.loadCards();
+		await this.loadCurrentDeck();
 		
 		// 모바일 전체 너비 모드 적용
 		this.applyMobileFullWidth();
@@ -113,10 +118,14 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	async createCard(text: string, source: string) {
+		// 소스 경로에서 디렉토리 추출
+		const directory = this.getDirectoryFromPath(source);
+		
 		const card: CardData = {
 			id: Date.now().toString(),
 			text: text.trim(),
 			source: source,
+			directory: directory,
 			createdAt: Date.now(),
 			reviewed: false,
 			kept: false
@@ -136,6 +145,17 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	async startCardReview() {
+		// 캐시된 현재 덱 상태 확인
+		const cachedDeck = this.getCurrentDeck();
+		
+		// 현재 진행 중인 덱이 있으면 이어서 진행
+		if (cachedDeck && cachedDeck.cards.length > cachedDeck.currentIndex) {
+			const remainingCards = cachedDeck.cards.slice(cachedDeck.currentIndex);
+			new PreactCardReviewModal(this.app, this, remainingCards).open();
+			return;
+		}
+
+		// 덱이 없거나 모두 완료된 경우, 새로운 덱 생성
 		const unreviewed = this.getUnreviewedCards();
 		
 		if (unreviewed.length === 0) {
@@ -150,7 +170,7 @@ export default class CardReviewPlugin extends Plugin {
 				// 리셋 후 다시 리뷰 시작
 				const resetUnreviewed = this.getUnreviewedCards();
 				if (resetUnreviewed.length > 0) {
-					new PreactCardReviewModal(this.app, this, resetUnreviewed).open();
+					this.showSourceSelection(resetUnreviewed);
 				}
 			} else {
 				new Notice('리뷰할 카드가 없습니다.');
@@ -158,7 +178,36 @@ export default class CardReviewPlugin extends Plugin {
 			return;
 		}
 
-		new PreactCardReviewModal(this.app, this, unreviewed).open();
+		// 소스 선택 모달 표시
+		this.showSourceSelection(unreviewed);
+	}
+
+	private showSourceSelection(cards: CardData[]) {
+		new PreactSourceSelectionModal(
+			this.app, 
+			this, 
+			cards, 
+			(selectedCards) => this.startReviewWithCards(selectedCards)
+		).open();
+	}
+
+	private async startReviewWithCards(selectedCards: CardData[]) {
+		if (selectedCards.length === 0) {
+			new Notice('선택된 카드가 없습니다.');
+			return;
+		}
+
+		// 새로운 덱 생성
+		this.currentDeck = {
+			cards: selectedCards,
+			currentIndex: 0
+		};
+		
+		// 덱 상태 저장 및 캐시 무효화
+		await this.saveCurrentDeck();
+		this.invalidateDeckCache();
+
+		new PreactCardReviewModal(this.app, this, selectedCards).open();
 	}
 
 	async resetAllCards() {
@@ -169,7 +218,12 @@ export default class CardReviewPlugin extends Plugin {
 			}
 		});
 		
+		// 현재 덱 상태 초기화
+		this.currentDeck = null;
+		
 		await this.saveCards();
+		await this.saveCurrentDeck();
+		this.invalidateDeckCache();
 		this.refreshAllCardsView();
 		this.updateRibbonBadge();
 	}
@@ -220,6 +274,13 @@ export default class CardReviewPlugin extends Plugin {
 			await this.saveCards();
 			this.refreshAllCardsView();
 			this.updateRibbonBadge();
+			
+			// 현재 덱 상태 업데이트
+			if (this.currentDeck) {
+				this.currentDeck.currentIndex++;
+				await this.saveCurrentDeck();
+				this.invalidateDeckCache();
+			}
 		}
 	}
 
@@ -229,16 +290,45 @@ export default class CardReviewPlugin extends Plugin {
 		await this.saveCards();
 		this.refreshAllCardsView();
 		this.updateRibbonBadge();
+		
+		// 현재 덱 상태 업데이트
+		if (this.currentDeck) {
+			this.currentDeck.currentIndex++;
+			await this.saveCurrentDeck();
+			this.invalidateDeckCache();
+		}
 	}
 
 	async loadCards() {
 		const data = await this.loadData();
-		this.cards = data?.cards || [];
+		this.cards = (data?.cards || []).map(card => ({
+			...card,
+			// 기존 카드에 directory 필드가 없으면 기본값 설정
+			directory: card.directory || this.getDirectoryFromPath(card.source)
+		}));
 		this.invalidateCache();
 	}
 
+	async loadCurrentDeck() {
+		const data = await this.loadData();
+		this.currentDeck = data?.currentDeck || null;
+		this.invalidateDeckCache();
+	}
+
 	async saveCards() {
-		await this.saveData({ cards: this.cards });
+		const data = await this.loadData();
+		await this.saveData({ 
+			...data,
+			cards: this.cards 
+		});
+	}
+
+	async saveCurrentDeck() {
+		const data = await this.loadData();
+		await this.saveData({ 
+			...data,
+			currentDeck: this.currentDeck 
+		});
 	}
 
 	async loadSettings() {
@@ -262,6 +352,11 @@ export default class CardReviewPlugin extends Plugin {
 		this.unreviewedCache = [];
 		this.allCardsCache = [];
 		this.cacheTimestamp = 0;
+	}
+
+	private invalidateDeckCache() {
+		this.currentDeckCache = null;
+		this.deckCacheTimestamp = 0;
 	}
 
 	private getUnreviewedCards(): CardData[] {
@@ -289,6 +384,15 @@ export default class CardReviewPlugin extends Plugin {
 		return this.allCardsCache;
 	}
 
+	private getCurrentDeck(): CurrentDeck | null {
+		const now = Date.now();
+		if (this.currentDeckCache === null || now - this.deckCacheTimestamp > this.CACHE_DURATION) {
+			this.currentDeckCache = this.currentDeck;
+			this.deckCacheTimestamp = now;
+		}
+		return this.currentDeckCache;
+	}
+
 	// 페이지네이션 메서드
 	getCardsByPage(page: number, itemsPerPage: number = 50): CardData[] {
 		const allCards = this.getAllCards();
@@ -308,6 +412,22 @@ export default class CardReviewPlugin extends Plugin {
 			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
 		}
 		return shuffled;
+	}
+
+	// 경로에서 디렉토리 추출
+	private getDirectoryFromPath(path: string): string {
+		if (!path || path === '알 수 없음') {
+			return '기본함';
+		}
+		
+		const pathParts = path.split('/');
+		if (pathParts.length <= 1) {
+			return '기본함';
+		}
+		
+		// 마지막 요소(파일명) 제거하고 디렉토리 경로 반환
+		pathParts.pop();
+		return pathParts.join('/') || '기본함';
 	}
 
 	// 리본 아이콘 배지 업데이트
