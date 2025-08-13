@@ -1,15 +1,7 @@
 import { h } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { MarkdownRenderer, App, Component } from 'obsidian';
-
-interface CardData {
-  id: string;
-  text: string;
-  source: string;
-  createdAt: number;
-  reviewed: boolean;
-  kept: boolean;
-}
+import type { CardData } from '../types';
 
 interface AllCardsComponentProps {
   cards: CardData[];
@@ -24,16 +16,36 @@ interface AllCardsComponentProps {
 
 function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: string) => void; plugin: Component }) {
   const mdRef = useRef<HTMLDivElement>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (mdRef.current) {
-      mdRef.current.innerHTML = '';
-      MarkdownRenderer.renderMarkdown(card.text, mdRef.current, '', plugin);
+    if (mdRef.current && card.text) {
+      try {
+        mdRef.current.innerHTML = '';
+        MarkdownRenderer.renderMarkdown(card.text, mdRef.current, '', plugin);
+      } catch (error) {
+        console.error('마크다운 렌더링 오류:', error);
+        if (mdRef.current) {
+          mdRef.current.textContent = card.text; // 폴백으로 일반 텍스트 표시
+        }
+      }
     }
-  }, [card.text]);
+  }, [card.text, card.id]);
+
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      await onDelete(card.id);
+    } catch (error) {
+      console.error('카드 삭제 오류:', error);
+      setIsDeleting(false);
+    }
+  };
 
   return (
-    <div class="card-item">
+    <div class={`card-item ${isDeleting ? 'deleting' : ''}`}>
       <div class="card-content">
         <div 
           class="card-text markdown-preview-view" 
@@ -43,6 +55,7 @@ function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: s
         <div class="card-meta">
           <small>출처: {card.source}</small>
           <small>생성일: {new Date(card.createdAt).toLocaleDateString()}</small>
+          {card.directory && <small>폴더: {card.directory}</small>}
         </div>
       </div>
       <div class="card-status">
@@ -54,10 +67,11 @@ function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: s
       </div>
       <button 
         class="mod-warning card-delete-btn" 
-        onClick={() => onDelete(card.id)}
+        onClick={handleDelete}
+        disabled={isDeleting}
         title="카드 삭제"
       >
-        삭제
+        {isDeleting ? '삭제 중...' : '삭제'}
       </button>
     </div>
   );
@@ -73,11 +87,26 @@ export function AllCardsComponent({
   app, 
   plugin 
 }: AllCardsComponentProps) {
+  const [isResetting, setIsResetting] = useState(false);
+  
   // 전체 카드 통계 (현재 페이지가 아닌 전체)
   const allCards = (plugin as any).cards || [];
   const total = allCards.length;
   const reviewed = allCards.filter((c: any) => c.reviewed).length;
   const unreviewed = allCards.filter((c: any) => !c.reviewed).length;
+
+  const handleResetAllCards = async () => {
+    if (isResetting || reviewed === 0) return;
+    
+    setIsResetting(true);
+    try {
+      await onResetAllCards();
+    } catch (error) {
+      console.error('카드 리셋 오류:', error);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <div class="all-cards-view">
@@ -100,11 +129,11 @@ export function AllCardsComponent({
         <div class="card-actions">
           <button 
             class="mod-cta"
-            onClick={onResetAllCards}
-            disabled={reviewed === 0}
+            onClick={handleResetAllCards}
+            disabled={reviewed === 0 || isResetting}
             title="저장된 카드를 모두 리뷰 대기 상태로 돌아가게 합니다"
           >
-            {reviewed === 0 ? '리셋할 카드 없음' : '모든 카드 리셋'}
+            {isResetting ? '리셋 중...' : (reviewed === 0 ? '리셋할 카드 없음' : '모든 카드 리셋')}
           </button>
         </div>
       </div>

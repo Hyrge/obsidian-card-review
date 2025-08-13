@@ -9,6 +9,8 @@ export class AllCardsView extends ItemView {
   plugin: CardReviewPlugin;
   private currentPage: number = 0;
   private readonly itemsPerPage: number = 50;
+  private refreshInterval: number | null = null;
+  private isRendering: boolean = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: CardReviewPlugin) {
     super(leaf);
@@ -29,15 +31,33 @@ export class AllCardsView extends ItemView {
 
   async onOpen() {
     this.renderCards();
+    
+    // 자동 새로고침 타이머 시작 (5초마다)
+    this.refreshInterval = window.setInterval(() => {
+      if (!this.isRendering) {
+        this.refresh();
+      }
+    }, 5000);
   }
 
   async onClose() {
-    // 정리 작업
+    // 자동 새로고침 타이머 정리
+    if (this.refreshInterval) {
+      window.clearInterval(this.refreshInterval);
+      this.refreshInterval = null;
+    }
   }
 
   renderCards() {
-    const container = this.containerEl.children[1];
-    container.empty();
+    if (this.isRendering) {
+      return; // 이미 렌더링 중이면 중단
+    }
+    
+    this.isRendering = true;
+    
+    try {
+      const container = this.containerEl.children[1];
+      container.empty();
 
     const handleDeleteCard = async (cardId: string) => {
       try {
@@ -97,10 +117,17 @@ export class AllCardsView extends ItemView {
       }),
       container
     );
+    } catch (error) {
+      console.error('AllCardsView 렌더링 오류:', error);
+    } finally {
+      this.isRendering = false;
+    }
   }
 
   // 플러그인에서 카드가 변경될 때 호출할 메서드
   refresh() {
-    this.renderCards();
+    if (!this.isRendering) {
+      this.renderCards();
+    }
   }
 } 

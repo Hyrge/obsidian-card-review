@@ -201,6 +201,167 @@
 	background: var(--background-modifier-hover);
 }
 
+/* 모든 카드 보기 스타일 */
+.all-cards-view {
+	padding: 20px;
+}
+
+.all-cards-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+	gap: 15px;
+}
+
+.all-cards-header h2 {
+	margin: 0;
+}
+
+.card-stats {
+	display: flex;
+	gap: 20px;
+	flex-wrap: wrap;
+}
+
+.stat-item {
+	text-align: center;
+	padding: 10px 15px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	min-width: 80px;
+}
+
+.stat-number {
+	display: block;
+	font-size: 1.5em;
+	font-weight: bold;
+	color: var(--interactive-accent);
+}
+
+.stat-label {
+	display: block;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	margin-top: 5px;
+}
+
+.cards-list {
+	display: flex;
+	flex-direction: column;
+	gap: 15px;
+}
+
+.card-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 15px;
+	padding: 15px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	border: 2px solid transparent;
+	transition: all 0.2s ease;
+}
+
+.card-item:hover {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.card-item.deleting {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.card-content {
+	flex-grow: 1;
+}
+
+.card-text {
+	margin-bottom: 8px;
+	line-height: 1.5;
+}
+
+.card-meta {
+	display: flex;
+	gap: 15px;
+	flex-wrap: wrap;
+}
+
+.card-meta small {
+	color: var(--text-muted);
+	font-size: 0.85em;
+}
+
+.card-status {
+	display: flex;
+	align-items: center;
+}
+
+.status-kept {
+	background: var(--color-green);
+	color: white;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 0.8em;
+	font-weight: bold;
+}
+
+.status-pending {
+	background: var(--color-orange);
+	color: white;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 0.8em;
+	font-weight: bold;
+}
+
+.card-delete-btn {
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 0.9em;
+}
+
+.pagination {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 15px;
+	margin-top: 20px;
+	padding: 20px;
+}
+
+.pagination-btn {
+	padding: 8px 16px;
+	background: var(--interactive-accent);
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.pagination-btn:disabled {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	cursor: not-allowed;
+}
+
+.pagination-info {
+	font-weight: bold;
+	color: var(--text-normal);
+}
+
+.empty-state {
+	text-align: center;
+	padding: 40px 20px;
+	color: var(--text-muted);
+}
+
+.empty-state p {
+	margin-bottom: 10px;
+}
+
 /* 모바일 반응형 */
 @media (max-width: 768px) {
 	.source-selection-modal,
@@ -229,5 +390,35 @@
 	
 	.source-selection-content {
 		max-height: 300px;
+	}
+	
+	.all-cards-view {
+		padding: 15px;
+	}
+	
+	.all-cards-header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 15px;
+	}
+	
+	.card-stats {
+		width: 100%;
+		justify-content: space-between;
+	}
+	
+	.stat-item {
+		flex: 1;
+		min-width: 0;
+	}
+	
+	.card-item {
+		flex-direction: column;
+		gap: 10px;
+	}
+	
+	.card-meta {
+		flex-direction: column;
+		gap: 5px;
 	}
 }

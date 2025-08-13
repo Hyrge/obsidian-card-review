@@ -132,15 +132,17 @@ export default class CardReviewPlugin extends Plugin {
 		};
 
 		this.cards.push(card);
-		this.invalidateCache(); // 캐시 무효화
+		
+		// 캐시 무효화
+		this.invalidateCache();
+		
+		// 데이터 저장
 		await this.saveCards();
 		
 		new Notice(`카드가 생성되었습니다: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
 		
-		// AllCardsView가 열려있으면 새로고침
+		// UI 업데이트
 		this.refreshAllCardsView();
-		
-		// 리본 배지 업데이트
 		this.updateRibbonBadge();
 	}
 
@@ -254,15 +256,29 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	refreshAllCardsView() {
-		const leaves = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
-		leaves.forEach(leaf => {
-			if (leaf.view instanceof AllCardsView) {
-				// 약간의 지연을 두고 새로고침 (DOM 업데이트 보장)
-				setTimeout(() => {
-					(leaf.view as AllCardsView).refresh();
-				}, 10);
-			}
-		});
+		try {
+			const leaves = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
+			leaves.forEach(leaf => {
+				if (leaf.view instanceof AllCardsView) {
+					try {
+						// 즉시 새로고침 (지연 제거)
+						(leaf.view as AllCardsView).refresh();
+					} catch (error) {
+						console.error('AllCardsView 새로고침 중 오류:', error);
+						// 오류 발생 시 다시 시도
+						setTimeout(() => {
+							try {
+								(leaf.view as AllCardsView).refresh();
+							} catch (retryError) {
+								console.error('AllCardsView 재시도 새로고침 실패:', retryError);
+							}
+						}, 100);
+					}
+				}
+			});
+		} catch (error) {
+			console.error('refreshAllCardsView 전체 오류:', error);
+		}
 	}
 
 	async saveCard(cardId: string, keep: boolean) {
@@ -270,33 +286,49 @@ export default class CardReviewPlugin extends Plugin {
 		if (card) {
 			card.reviewed = true;
 			card.kept = keep;
-			this.invalidateCache(); // 캐시 무효화
-			await this.saveCards();
-			this.refreshAllCardsView();
-			this.updateRibbonBadge();
 			
 			// 현재 덱 상태 업데이트
 			if (this.currentDeck) {
 				this.currentDeck.currentIndex++;
-				await this.saveCurrentDeck();
-				this.invalidateDeckCache();
 			}
+			
+			// 캐시 무효화
+			this.invalidateCache();
+			this.invalidateDeckCache();
+			
+			// 데이터 저장
+			await this.saveCards();
+			if (this.currentDeck) {
+				await this.saveCurrentDeck();
+			}
+			
+			// UI 업데이트
+			this.refreshAllCardsView();
+			this.updateRibbonBadge();
 		}
 	}
 
 	async deleteCard(cardId: string) {
 		this.cards = this.cards.filter(c => c.id !== cardId);
-		this.invalidateCache(); // 캐시 무효화
-		await this.saveCards();
-		this.refreshAllCardsView();
-		this.updateRibbonBadge();
 		
 		// 현재 덱 상태 업데이트
 		if (this.currentDeck) {
 			this.currentDeck.currentIndex++;
-			await this.saveCurrentDeck();
-			this.invalidateDeckCache();
 		}
+		
+		// 캐시 무효화
+		this.invalidateCache();
+		this.invalidateDeckCache();
+		
+		// 데이터 저장
+		await this.saveCards();
+		if (this.currentDeck) {
+			await this.saveCurrentDeck();
+		}
+		
+		// UI 업데이트
+		this.refreshAllCardsView();
+		this.updateRibbonBadge();
 	}
 
 	async loadCards() {
