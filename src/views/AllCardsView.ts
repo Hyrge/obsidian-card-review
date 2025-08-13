@@ -85,18 +85,35 @@ export class AllCardsView extends ItemView {
 
     const handlePageChange = (page: number) => {
       this.currentPage = page;
+      // 상위에서 전체 렌더는 유지하되, 빈번 호출 방지
       this.renderCards();
+    };
+
+    const handleMoveSource = async (source: string, dir: string) => {
+      try {
+        if (!source) {
+          await this.plugin.createDirectory(dir);
+        } else {
+          await this.plugin.moveSourceToDirectory(source, dir);
+        }
+        this.renderCards();
+      } catch (e) {
+        console.error('소스 이동 오류:', e);
+      }
     };
 
     // 현재 페이지의 카드들만 가져오기
     const currentCards = this.plugin.getCardsByPage(this.currentPage, this.itemsPerPage);
     const totalPages = this.plugin.getTotalPages(this.itemsPerPage);
+    const allCards = (this.plugin as any).cards || [];
 
     render(
       h(AllCardsComponent, {
         cards: currentCards,
+        allCards,
         onDeleteCard: handleDeleteCard,
         onResetAllCards: handleResetAllCards,
+        onMoveSource: handleMoveSource,
         onPageChange: handlePageChange,
         currentPage: this.currentPage,
         totalPages: totalPages,

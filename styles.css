@@ -205,13 +205,14 @@
 /* 폴더 그리드(정사각형 타일) */
 .directory-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+	grid-template-columns: repeat(auto-fill, 140px);
 	gap: 16px;
 	margin-top: 20px;
+	justify-content: start;
 }
 
 .directory-tile {
-	aspect-ratio: 1;
+	height: 140px;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 12px;
@@ -236,6 +237,17 @@
 	background: var(--interactive-accent);
 	color: white;
 	border-color: var(--interactive-accent);
+}
+
+.directory-tile.create {
+	background: transparent;
+	border: 2px dashed var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.directory-tile.create:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
 }
 
 .directory-title {

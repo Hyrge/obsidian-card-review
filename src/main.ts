@@ -19,6 +19,9 @@ export default class CardReviewPlugin extends Plugin {
 	private deckCacheTimestamp: number = 0;
 	private readonly CACHE_DURATION = 5000; // 5초
 
+	// 사용자 생성 디렉토리 목록
+	private userDirectories: Set<string> = new Set();
+
 	async onload() {
 		await this.loadSettings();
 		await this.loadCards();
@@ -331,9 +334,28 @@ export default class CardReviewPlugin extends Plugin {
 		this.updateRibbonBadge();
 	}
 
+	/**
+	 * 특정 소스(노트)의 모든 카드를 지정한 디렉토리로 이동
+	 */
+	async moveSourceToDirectory(source: string, newDirectory: string) {
+		let changed = 0;
+		for (const card of this.cards) {
+			if (card.source === source && card.directory !== newDirectory) {
+				card.directory = newDirectory;
+				changed++;
+			}
+		}
+		if (changed === 0) {
+			return;
+		}
+		this.invalidateCache();
+		await this.saveCards();
+		this.refreshAllCardsView();
+	}
+
 	async loadCards() {
 		const data = await this.loadData();
-		this.cards = (data?.cards || []).map(card => ({
+    this.cards = (data?.cards || []).map((card: any) => ({
 			...card,
 			// 기존 카드에 directory 필드가 없으면 기본값 설정
 			directory: card.directory || this.getDirectoryFromPath(card.source)
@@ -369,6 +391,24 @@ export default class CardReviewPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	// 사용자 디렉토리 관리
+	getAllDirectories(): string[] {
+		const dirs = new Set<string>(['기본함']);
+		for (const c of this.cards) {
+			dirs.add(c.directory || '기본함');
+		}
+		for (const d of this.userDirectories) dirs.add(d);
+		return Array.from(dirs).sort();
+	}
+
+	async createDirectory(name: string) {
+		const safe = name?.trim();
+		if (!safe) return;
+		this.userDirectories.add(safe);
+		await this.saveCards();
+		this.refreshAllCardsView();
 	}
 
 	applyMobileFullWidth() {
