@@ -45,7 +45,10 @@ export class AllCardsView extends ItemView {
     this.isRendering = true;
     
     try {
-      const container = this.containerEl.children[1];
+      const container = this.contentEl;
+      container.empty();
+      // 안전한 렌더 타깃 생성
+      const root = container.createDiv({ cls: 'all-cards-root' });
 
     const handleDeleteCard = async (cardId: string) => {
       try {
@@ -89,18 +92,8 @@ export class AllCardsView extends ItemView {
       this.renderCards();
     };
 
-    const handleMoveSource = async (source: string, dir: string) => {
-      try {
-        if (!source) {
-          await this.plugin.createDirectory(dir);
-        } else {
-          await this.plugin.moveSourceToDirectory(source, dir);
-        }
-        this.renderCards();
-      } catch (e) {
-        console.error('소스 이동 오류:', e);
-      }
-    };
+    // 사이드바로 이동 기능을 이전했으므로, 이 핸들러는 유지하되 호출되지 않음
+    const handleMoveSource = async (source: string, dir: string) => {};
 
     // 현재 페이지의 카드들만 가져오기
     const currentCards = this.plugin.getCardsByPage(this.currentPage, this.itemsPerPage);
@@ -113,14 +106,13 @@ export class AllCardsView extends ItemView {
         allCards,
         onDeleteCard: handleDeleteCard,
         onResetAllCards: handleResetAllCards,
-        onMoveSource: handleMoveSource,
         onPageChange: handlePageChange,
         currentPage: this.currentPage,
         totalPages: totalPages,
         app: this.app,
         plugin: this.plugin
       }),
-      container
+      root
     );
     } catch (error) {
       console.error('AllCardsView 렌더링 오류:', error);

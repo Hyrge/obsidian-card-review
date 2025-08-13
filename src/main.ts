@@ -1,5 +1,6 @@
 import { App, Editor, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import { AllCardsView, ALL_CARDS_VIEW_TYPE } from './views/AllCardsView';
+import { DirectorySidebarView, DIRECTORY_SIDEBAR_VIEW } from './views/DirectorySidebarView';
 import { PreactCardReviewModal } from './PreactCardReviewModal';
 import { PreactSourceSelectionModal } from './PreactSourceSelectionModal';
 import { CardReviewSettingTab } from './CardReviewSettingTab';
@@ -32,6 +33,9 @@ export default class CardReviewPlugin extends Plugin {
 
 		// AllCardsView 등록
 		this.registerView(ALL_CARDS_VIEW_TYPE, (leaf) => new AllCardsView(leaf, this));
+
+		// Directory Sidebar View 등록
+		this.registerView(DIRECTORY_SIDEBAR_VIEW, (leaf) => new DirectorySidebarView(leaf, this));
 
 		// 카드 리뷰 리본 아이콘
 		const reviewRibbonIcon = this.addRibbonIcon('play', '카드 리뷰 시작', (evt: MouseEvent) => {
@@ -256,6 +260,14 @@ export default class CardReviewPlugin extends Plugin {
 				active: true
 			});
 		}
+
+		// 사이드바도 함께 열기
+		const rightLeaves = this.app.workspace.getLeavesOfType(DIRECTORY_SIDEBAR_VIEW);
+		if (rightLeaves.length === 0) {
+			const right = this.app.workspace.getRightLeaf(false);
+			await right?.setViewState({ type: DIRECTORY_SIDEBAR_VIEW, active: false });
+			this.app.workspace.revealLeaf(right!);
+		}
 	}
 
 	refreshAllCardsView() {
@@ -408,6 +420,26 @@ export default class CardReviewPlugin extends Plugin {
 		if (!safe) return;
 		this.userDirectories.add(safe);
 		await this.saveCards();
+		this.refreshAllCardsView();
+	}
+
+	async deleteDirectory(name: string) {
+		const target = name?.trim();
+		if (!target || target === '기본함') return;
+		// 해당 디렉토리에 속한 카드들은 기본함으로 이동
+		let moved = 0;
+		for (const card of this.cards) {
+			if ((card.directory || '기본함') === target) {
+				card.directory = '기본함';
+				moved++;
+			}
+		}
+		// 사용자 생성 디렉토리라면 목록에서 제거
+		if (this.userDirectories.has(target)) {
+			this.userDirectories.delete(target);
+		}
+		await this.saveCards();
+		this.invalidateCache();
 		this.refreshAllCardsView();
 	}
 

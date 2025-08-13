@@ -9,7 +9,6 @@ interface AllCardsComponentProps {
   allCards: CardData[];
   onDeleteCard: (id: string) => void;
   onResetAllCards: () => void;
-  onMoveSource: (source: string, dir: string) => void;
   onPageChange: (page: number) => void;
   currentPage: number;
   totalPages: number;
@@ -85,7 +84,6 @@ export function AllCardsComponent({
   allCards,
   onDeleteCard, 
   onResetAllCards,
-  onMoveSource,
   onPageChange,
   currentPage,
   totalPages,
@@ -94,8 +92,6 @@ export function AllCardsComponent({
 }: AllCardsComponentProps) {
   const [isResetting, setIsResetting] = useState(false);
   const [selectedDirectory, setSelectedDirectory] = useState<string>('기본함');
-  const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const [dragSource, setDragSource] = useState<string | null>(null);
   const [localPage, setLocalPage] = useState<number>(0);
   
   // 전체 카드 통계 (현재 페이지가 아닌 전체)
@@ -113,23 +109,10 @@ export function AllCardsComponent({
     return map;
   }, [allCards]);
 
-  const sourcesBySelectedDirectory = useMemo(() => {
-    const list = directories[selectedDirectory] || [];
-    const map: Record<string, CardData[]> = {};
-    for (const c of list) {
-      (map[c.source] ||= []).push(c);
-    }
-    return map;
-  }, [directories, selectedDirectory]);
-
-  // 선택 상태에 따른 표시 카드 및 페이지네이션 계산
+  // 선택 디렉토리의 모든 카드
   const filteredCards = useMemo(() => {
-    const base = directories[selectedDirectory] || [];
-    if (selectedSource) {
-      return base.filter(c => c.source === selectedSource);
-    }
-    return base;
-  }, [directories, selectedDirectory, selectedSource]);
+    return directories[selectedDirectory] || [];
+  }, [directories, selectedDirectory]);
 
   const totalPagesLocal = Math.max(1, Math.ceil(filteredCards.length / ITEMS_PER_PAGE));
   const pagedCards = filteredCards.slice(localPage * ITEMS_PER_PAGE, (localPage + 1) * ITEMS_PER_PAGE);
@@ -137,7 +120,7 @@ export function AllCardsComponent({
   // 디렉토리/소스 변경 시 페이지 초기화
   useEffect(() => {
     setLocalPage(0);
-  }, [selectedDirectory, selectedSource]);
+  }, [selectedDirectory]);
 
   const handleResetAllCards = async () => {
     if (isResetting || reviewed === 0) return;
@@ -184,60 +167,30 @@ export function AllCardsComponent({
 
       {/* 상단 디렉토리 그리드 */}
       <div class="directory-grid" style="margin-bottom:16px;">
-        {/* 새 디렉토리 만들기 */}
-        <div
-          class="directory-tile create"
-          onClick={() => {
-            const name = prompt('새 디렉토리 이름을 입력하세요');
-            if (name && name.trim().length > 0) {
-              onMoveSource('', name.trim()); // 빈 소스는 무시, 뷰 리프레시용
-            }
-          }}
-          title="새 디렉토리 만들기"
-        >
-          <div class="directory-title">+ 새 디렉토리</div>
-        </div>
-
         {Object.keys(directories).sort().map((dir) => (
           <div
             class={`directory-tile ${dir === selectedDirectory ? 'all-cards' : ''}`}
-            onClick={() => { setSelectedDirectory(dir); setSelectedSource(null); }}
-            onDragOver={(e: any) => { if (dragSource) e.preventDefault(); }}
-            onDrop={() => { if (dragSource) { onMoveSource(dragSource, dir); setSelectedSource(null); } }}
+            onClick={() => { setSelectedDirectory(dir); }}
+            onDragOver={(e: any) => { e.preventDefault(); }}
+            onDrop={(e: any) => {
+              try {
+                const data = e.dataTransfer.getData('text/plain');
+                if (!data) return;
+                // data에는 source 경로가 들어온다고 가정
+                const payload = JSON.parse(data);
+                if (payload && payload.type === 'source' && payload.source) {
+                  // 커스텀 이벤트로 상위에 요청 전달 (플러그인 핸들링)
+                  const ev = new CustomEvent('card-review-move-source', { detail: { source: payload.source, dir } });
+                  window.dispatchEvent(ev);
+                }
+              } catch {}
+            }}
           >
             <div class="directory-title">{dir}</div>
           </div>
         ))}
       </div>
-
-      {/* 선택된 디렉토리의 소스 리스트 + 드래그로 디렉토리 이동 */}
       <div class="cards-list">
-        {Object.keys(sourcesBySelectedDirectory).length > 0 && (
-          <>
-            {Object.entries(sourcesBySelectedDirectory).map(([source, sourceCards]) => (
-              <div
-                class={`card-item ${selectedSource === source ? 'selected' : ''}`}
-                draggable={true}
-                onDragStart={() => setDragSource(source)}
-                onDragEnd={() => setDragSource(null)}
-                onClick={() => setSelectedSource(source)}
-                title="이 소스를 드래그해서 다른 디렉토리로 이동할 수 있습니다"
-              >
-                <div class="card-content">
-                  <div class="card-text" style="margin-bottom:4px;">{source}</div>
-                  <div class="card-meta">
-                    <small>{sourceCards.length}개의 카드</small>
-                    <small>현재 디렉토리: {selectedDirectory}</small>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* 드랍존: 디렉토리 타일에 드롭 시 이동 */}
-        <div style="display:none" />
-
         {pagedCards.length === 0 ? (
           <div class="empty-state">
             <p>저장된 카드가 없습니다.</p>
