@@ -126,7 +126,7 @@ export default class CardReviewPlugin extends Plugin {
 		// 현재 노트의 모든 블록을 카드로 만들기 명령어
 		this.addCommand({
 			id: 'create-cards-from-all-blocks',
-			name: '현재 노트의 모든 블록을 카드로 만들기',
+			name: '모든 블록을 카드로 만들기',
 			editorCallback: async (editor: Editor, ctx: MarkdownView | any) => {
 				if (!('file' in ctx) || !ctx.file) {
 					new Notice('마크다운 파일에서만 사용할 수 있습니다.');
