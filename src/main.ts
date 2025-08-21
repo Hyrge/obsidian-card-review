@@ -153,8 +153,8 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	async createCard(text: string, source: string) {
-		// 소스 경로에서 디렉토리 추출
-		const directory = this.getDirectoryFromPath(source);
+		// 모든 카드는 기본적으로 '기본함'에 추가
+		const directory = '기본함';
 		
 		const card: CardData = {
 			id: Date.now().toString(),
@@ -190,7 +190,8 @@ export default class CardReviewPlugin extends Plugin {
 				return;
 			}
 
-			const directory = this.getDirectoryFromPath(file.path);
+			// 모든 카드는 기본적으로 '기본함'에 추가
+			const directory = '기본함';
 			let createdCount = 0;
 
 			for (const block of blocks) {
