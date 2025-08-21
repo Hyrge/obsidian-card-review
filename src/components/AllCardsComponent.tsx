@@ -257,7 +257,13 @@ export function AllCardsComponent({
                 <button 
                   class="pagination-btn"
                   disabled={localPage === totalPagesLocal - 1}
-                  onClick={() => { setLocalPage(p => Math.min(totalPagesLocal - 1, p + 1)); onPageChange(localPage + 1); }}
+                  onClick={() => {
+                    setLocalPage(p => {
+                      const newPage = Math.min(totalPagesLocal - 1, p + 1);
+                      onPageChange(newPage);
+                      return newPage;
+                    });
+                  }}
                 >
                   다음
                 </button>
