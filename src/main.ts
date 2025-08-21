@@ -6,6 +6,7 @@ import { PreactSourceSelectionModal } from './PreactSourceSelectionModal';
 import { CardReviewSettingTab } from './CardReviewSettingTab';
 import type { CardData, CardReviewSettings, CurrentDeck } from './types';
 import { DEFAULT_SETTINGS } from './types';
+import { BlockParser } from './blockUtils';
 
 export default class CardReviewPlugin extends Plugin {
 	settings!: CardReviewSettings;
@@ -23,10 +24,16 @@ export default class CardReviewPlugin extends Plugin {
 	// 사용자 생성 디렉토리 목록
 	private userDirectories: Set<string> = new Set();
 
+	// 블록 파서
+	private blockParser!: BlockParser;
+
 	async onload() {
 		await this.loadSettings();
 		await this.loadCards();
 		await this.loadCurrentDeck();
+		
+		// 블록 파서 초기화
+		this.blockParser = new BlockParser(this.app);
 		
 		// 모바일 전체 너비 모드 적용
 		this.applyMobileFullWidth();
@@ -116,6 +123,20 @@ export default class CardReviewPlugin extends Plugin {
 			}
 		});
 
+		// 현재 노트의 모든 블록을 카드로 만들기 명령어
+		this.addCommand({
+			id: 'create-cards-from-all-blocks',
+			name: '현재 노트의 모든 블록을 카드로 만들기',
+			editorCallback: async (editor: Editor, ctx: MarkdownView | any) => {
+				if (!('file' in ctx) || !ctx.file) {
+					new Notice('마크다운 파일에서만 사용할 수 있습니다.');
+					return;
+				}
+				
+				await this.createCardsFromAllBlocks(ctx.file as TFile);
+			}
+		});
+
 		// 설정 탭 추가
 		this.addSettingTab(new CardReviewSettingTab(this.app, this));
 
@@ -158,6 +179,54 @@ export default class CardReviewPlugin extends Plugin {
 		// UI 업데이트
 		this.refreshAllCardsView();
 		this.updateRibbonBadge();
+	}
+
+	async createCardsFromAllBlocks(file: TFile) {
+		try {
+			const blocks = await this.blockParser.getBlocksForCards(file);
+			
+			if (blocks.length === 0) {
+				new Notice('이 파일에서 카드로 만들 수 있는 블록이 없습니다.');
+				return;
+			}
+
+			const directory = this.getDirectoryFromPath(file.path);
+			let createdCount = 0;
+
+			for (const block of blocks) {
+				const card: CardData = {
+					id: `${Date.now()}-${createdCount}`,
+					text: block.content,
+					source: file.path,
+					directory: directory,
+					createdAt: Date.now(),
+					reviewed: false,
+					kept: false
+				};
+
+				this.cards.push(card);
+				createdCount++;
+				
+				// 각 카드 생성 사이에 짧은 지연을 추가하여 고유한 ID 보장
+				await new Promise(resolve => setTimeout(resolve, 1));
+			}
+
+			// 캐시 무효화
+			this.invalidateCache();
+			
+			// 데이터 저장
+			await this.saveCards();
+			
+			new Notice(`${createdCount}개의 블록이 카드로 생성되었습니다.`);
+			
+			// UI 업데이트
+			this.refreshAllCardsView();
+			this.updateRibbonBadge();
+			
+		} catch (error) {
+			console.error('블록을 카드로 변환하는 중 오류 발생:', error);
+			new Notice('블록을 카드로 변환하는 중 오류가 발생했습니다.');
+		}
 	}
 
 	async startCardReview() {
@@ -277,6 +346,19 @@ export default class CardReviewPlugin extends Plugin {
 		}
 	}
 
+	async openDirectorySidebar() {
+		const existing = this.app.workspace.getLeavesOfType(DIRECTORY_SIDEBAR_VIEW);
+		if (existing.length > 0) {
+			// 이미 열려있으면 해당 탭으로 이동
+			this.app.workspace.revealLeaf(existing[0]);
+		} else {
+			// 새로 열기
+			const right = this.app.workspace.getRightLeaf(false);
+			await right?.setViewState({ type: DIRECTORY_SIDEBAR_VIEW, active: true });
+			this.app.workspace.revealLeaf(right!);
+		}
+	}
+
 	refreshAllCardsView() {
 		try {
 			const leaves = this.app.workspace.getLeavesOfType(ALL_CARDS_VIEW_TYPE);
@@ -311,7 +393,7 @@ export default class CardReviewPlugin extends Plugin {
 					try {
 						// 안전하게 다시 렌더링
 						setTimeout(() => {
-							leaf.view.onOpen();
+							(leaf.view as DirectorySidebarView).refresh();
 						}, 10);
 					} catch (error) {
 						console.error('DirectorySidebar 새로고침 중 오류:', error);
