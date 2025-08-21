@@ -208,10 +208,14 @@
 	grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
 	gap: 16px;
 	margin-top: 20px;
+	justify-content: start;
+	justify-items: start;
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
 }
 
 .directory-tile {
-	aspect-ratio: 1;
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 12px;
@@ -223,6 +227,10 @@
 	transition: all 0.2s ease;
 	padding: 16px;
 	text-align: center;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 140px;
+	aspect-ratio: 1;
 }
 
 .directory-tile:hover {
@@ -236,6 +244,17 @@
 	background: var(--interactive-accent);
 	color: white;
 	border-color: var(--interactive-accent);
+}
+
+.directory-tile.create {
+	background: transparent;
+	border: 2px dashed var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.directory-tile.create:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
 }
 
 .directory-title {
@@ -294,6 +313,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: 15px;
+    position: relative;
+    z-index: 1;
 }
 
 .card-item {
@@ -337,27 +358,35 @@
 	font-size: 0.85em;
 }
 
+
 .card-status {
 	display: flex;
 	align-items: center;
 }
 
+.status-kept,
+.status-pending {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 6px 10px;
+	border-radius: 9999px;
+	font-size: 12px;
+	line-height: 1;
+	font-weight: 700;
+	white-space: nowrap;
+	min-height: 24px;
+	min-width: 64px;
+}
+
 .status-kept {
 	background: var(--color-green);
 	color: white;
-	padding: 4px 8px;
-	border-radius: 4px;
-	font-size: 0.8em;
-	font-weight: bold;
 }
 
 .status-pending {
 	background: var(--color-orange);
 	color: white;
-	padding: 4px 8px;
-	border-radius: 4px;
-	font-size: 0.8em;
-	font-weight: bold;
 }
 
 .card-delete-btn {
@@ -399,6 +428,7 @@
 	text-align: center;
 	padding: 40px 20px;
 	color: var(--text-muted);
+    pointer-events: none;
 }
 
 .empty-state p {

@@ -1,5 +1,6 @@
 import { App, Editor, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import { AllCardsView, ALL_CARDS_VIEW_TYPE } from './views/AllCardsView';
+import { DirectorySidebarView, DIRECTORY_SIDEBAR_VIEW } from './views/DirectorySidebarView';
 import { PreactCardReviewModal } from './PreactCardReviewModal';
 import { PreactSourceSelectionModal } from './PreactSourceSelectionModal';
 import { CardReviewSettingTab } from './CardReviewSettingTab';
@@ -19,6 +20,9 @@ export default class CardReviewPlugin extends Plugin {
 	private deckCacheTimestamp: number = 0;
 	private readonly CACHE_DURATION = 5000; // 5초
 
+	// 사용자 생성 디렉토리 목록
+	private userDirectories: Set<string> = new Set();
+
 	async onload() {
 		await this.loadSettings();
 		await this.loadCards();
@@ -29,6 +33,9 @@ export default class CardReviewPlugin extends Plugin {
 
 		// AllCardsView 등록
 		this.registerView(ALL_CARDS_VIEW_TYPE, (leaf) => new AllCardsView(leaf, this));
+
+		// Directory Sidebar View 등록
+		this.registerView(DIRECTORY_SIDEBAR_VIEW, (leaf) => new DirectorySidebarView(leaf, this));
 
 		// 카드 리뷰 리본 아이콘
 		const reviewRibbonIcon = this.addRibbonIcon('play', '카드 리뷰 시작', (evt: MouseEvent) => {
@@ -84,6 +91,15 @@ export default class CardReviewPlugin extends Plugin {
 			}
 		});
 
+		// 디렉토리 사이드바 열기 명령어
+		this.addCommand({
+			id: 'open-directory-sidebar',
+			name: '디렉토리 사이드바 열기',
+			callback: () => {
+				this.openDirectorySidebar();
+			}
+		});
+
 		// 모든 카드 리셋 명령어
 		this.addCommand({
 			id: 'reset-all-cards',
@@ -105,12 +121,10 @@ export default class CardReviewPlugin extends Plugin {
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.registerInterval(window.setInterval(() => {}, 5 * 60 * 1000));
 	}
 
 	onunload() {
@@ -253,6 +267,14 @@ export default class CardReviewPlugin extends Plugin {
 				active: true
 			});
 		}
+
+		// 사이드바도 함께 열기
+		const rightLeaves = this.app.workspace.getLeavesOfType(DIRECTORY_SIDEBAR_VIEW);
+		if (rightLeaves.length === 0) {
+			const right = this.app.workspace.getRightLeaf(false);
+			await right?.setViewState({ type: DIRECTORY_SIDEBAR_VIEW, active: false });
+			this.app.workspace.revealLeaf(right!);
+		}
 	}
 
 	refreshAllCardsView() {
@@ -278,6 +300,26 @@ export default class CardReviewPlugin extends Plugin {
 			});
 		} catch (error) {
 			console.error('refreshAllCardsView 전체 오류:', error);
+		}
+	}
+
+	refreshDirectorySidebar() {
+		try {
+			const leaves = this.app.workspace.getLeavesOfType(DIRECTORY_SIDEBAR_VIEW);
+			leaves.forEach(leaf => {
+				if (leaf.view instanceof DirectorySidebarView) {
+					try {
+						// 안전하게 다시 렌더링
+						setTimeout(() => {
+							leaf.view.onOpen();
+						}, 10);
+					} catch (error) {
+						console.error('DirectorySidebar 새로고침 중 오류:', error);
+					}
+				}
+			});
+		} catch (error) {
+			console.error('refreshDirectorySidebar 전체 오류:', error);
 		}
 	}
 
@@ -331,9 +373,30 @@ export default class CardReviewPlugin extends Plugin {
 		this.updateRibbonBadge();
 	}
 
+	/**
+	 * 특정 소스(노트)의 모든 카드를 지정한 디렉토리로 이동
+	 */
+	async moveSourceToDirectory(source: string, newDirectory: string) {
+		let changed = 0;
+		for (const card of this.cards) {
+			if (card.source === source && card.directory !== newDirectory) {
+				card.directory = newDirectory;
+				changed++;
+			}
+		}
+		if (changed === 0) {
+			return;
+		}
+		this.invalidateCache();
+		await this.saveCards();
+		this.refreshAllCardsView();
+		// AllCardsComponent와 DirectorySidebar에 카드 이동 완료 알림
+		window.dispatchEvent(new CustomEvent('card-review-move-complete'));
+	}
+
 	async loadCards() {
 		const data = await this.loadData();
-		this.cards = (data?.cards || []).map(card => ({
+    this.cards = (data?.cards || []).map((card: CardData) => ({
 			...card,
 			// 기존 카드에 directory 필드가 없으면 기본값 설정
 			directory: card.directory || this.getDirectoryFromPath(card.source)
@@ -369,6 +432,43 @@ export default class CardReviewPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	// 사용자 디렉토리 관리
+	getAllDirectories(): string[] {
+		const dirs = new Set<string>(['기본함']);
+		for (const c of this.cards) {
+			dirs.add(c.directory || '기본함');
+		}
+		for (const d of this.userDirectories) dirs.add(d);
+		return Array.from(dirs).sort();
+	}
+
+	async createDirectory(name: string) {
+		const safe = name?.trim();
+		if (!safe) return;
+		this.userDirectories.add(safe);
+		await this.saveCards();
+		this.refreshAllCardsView();
+	}
+
+	async deleteDirectory(name: string) {
+		const target = name?.trim();
+		if (!target || target === '기본함') return;
+		// 해당 디렉토리에 속한 카드들은 기본함으로 이동
+		let moved = 0;
+		for (const card of this.cards) {
+			if ((card.directory || '기본함') === target) {
+				card.directory = '기본함';
+				moved++;
+			}
+		}
+		// 사용자 생성 디렉토리라면 목록에서 제거
+		if (this.userDirectories.has(target)) {
+			this.userDirectories.delete(target);
+		}
+		await this.saveCards();
+		this.refreshAllCardsView();
 	}
 
 	applyMobileFullWidth() {
@@ -433,7 +533,8 @@ export default class CardReviewPlugin extends Plugin {
 	}
 
 	getTotalPages(itemsPerPage: number = 50): number {
-		return Math.ceil(this.cards.length / itemsPerPage);
+		const total = this.getAllCards().length;
+		return Math.max(1, Math.ceil(total / itemsPerPage));
 	}
 
 	// 배열을 랜덤하게 섞는 메서드 (Fisher-Yates 알고리즘)
@@ -469,7 +570,6 @@ export default class CardReviewPlugin extends Plugin {
 		// 리본 아이콘 찾기
 		const icon = ribbonIcon || document.querySelector('.ribbon-icon[aria-label="카드 리뷰"]') as HTMLElement;
 		if (!icon) {
-			console.log('리본 아이콘을 찾을 수 없습니다');
 			return;
 		}
 		

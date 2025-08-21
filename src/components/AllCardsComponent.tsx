@@ -1,10 +1,11 @@
-import { h } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { MarkdownRenderer, App, Component } from 'obsidian';
+import { ITEMS_PER_PAGE } from '../types';
 import type { CardData } from '../types';
 
 interface AllCardsComponentProps {
   cards: CardData[];
+  allCards: CardData[];
   onDeleteCard: (id: string) => void;
   onResetAllCards: () => void;
   onPageChange: (page: number) => void;
@@ -12,6 +13,8 @@ interface AllCardsComponentProps {
   totalPages: number;
   app: App;
   plugin: Component;
+  selectedDirectory: string;
+  onDirectorySelect: (dir: string) => void;
 }
 
 function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: string) => void; plugin: Component }) {
@@ -78,22 +81,64 @@ function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: s
 }
 
 export function AllCardsComponent({ 
-  cards, 
+  cards,
+  allCards,
   onDeleteCard, 
-  onResetAllCards, 
+  onResetAllCards,
   onPageChange,
   currentPage,
   totalPages,
   app, 
-  plugin 
+  plugin,
+  selectedDirectory,
+  onDirectorySelect
 }: AllCardsComponentProps) {
   const [isResetting, setIsResetting] = useState(false);
+  const [localPage, setLocalPage] = useState<number>(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // 전체 카드 통계 (현재 페이지가 아닌 전체)
-  const allCards = (plugin as any).cards || [];
   const total = allCards.length;
-  const reviewed = allCards.filter((c: any) => c.reviewed).length;
-  const unreviewed = allCards.filter((c: any) => !c.reviewed).length;
+  const reviewed = allCards.filter((c: CardData) => c.reviewed).length;
+  const unreviewed = allCards.filter((c: CardData) => !c.reviewed).length;
+
+  // 디렉토리 사전과 선택된 디렉토리의 소스 사전 만들기
+  const directories = useMemo(() => {
+    const map: Record<string, CardData[]> = {};
+    // 기본함은 항상 표시
+    map['기본함'] = [];
+    
+    for (const c of allCards) {
+      const dir = c.directory || '기본함';
+      (map[dir] ||= []).push(c);
+    }
+    
+    return map;
+  }, [allCards, refreshTrigger]);
+
+  // 선택 디렉토리의 모든 카드
+  const filteredCards = useMemo(() => {
+    const result = directories[selectedDirectory] || [];
+    return result;
+  }, [directories, selectedDirectory]);
+
+  const totalPagesLocal = Math.max(1, Math.ceil(filteredCards.length / ITEMS_PER_PAGE));
+  const pagedCards = filteredCards.slice(localPage * ITEMS_PER_PAGE, (localPage + 1) * ITEMS_PER_PAGE);
+
+  // 디렉토리/소스 변경 시 페이지 초기화
+  useEffect(() => {
+    setLocalPage(0);
+  }, [selectedDirectory]);
+
+  // 카드 이동 이벤트 수신
+  useEffect(() => {
+    const handleMoveComplete = () => {
+      setRefreshTrigger(prev => prev + 1);
+    };
+
+    window.addEventListener('card-review-move-complete', handleMoveComplete);
+    return () => window.removeEventListener('card-review-move-complete', handleMoveComplete);
+  }, [selectedDirectory]);
 
   const handleResetAllCards = async () => {
     if (isResetting || reviewed === 0) return;
@@ -138,15 +183,56 @@ export function AllCardsComponent({
         </div>
       </div>
 
+      {/* 상단 디렉토리 그리드 */}
+      <div class="directory-grid" style="margin-bottom:16px;">
+        {Object.keys(directories).sort().map((dir) => (
+          <div
+            class={`directory-tile ${dir === selectedDirectory ? 'all-cards' : ''}`}
+            style="cursor: pointer; pointer-events: auto;"
+            onClick={(e: MouseEvent) => { 
+              e.preventDefault();
+              e.stopPropagation();
+              onDirectorySelect(dir);
+            }}
+            onDragOver={(e: DragEvent) => { e.preventDefault(); }}
+            onDrop={(e: DragEvent) => {
+              try {
+                const data = e.dataTransfer?.getData('text/plain');
+                if (!data) return;
+                // data에는 source 경로가 들어온다고 가정
+                const payload = JSON.parse(data);
+                if (payload && payload.type === 'source' && payload.source) {
+                  // 커스텀 이벤트로 상위에 요청 전달 (플러그인 핸들링)
+                  const ev = new CustomEvent('card-review-move-source', { detail: { source: payload.source, dir } });
+                  window.dispatchEvent(ev);
+                }
+              } catch(error) {
+                console.error('디렉토리 이동 오류:', error);
+				}
+            }}
+          >
+            <div 
+              class="directory-title"
+              onClick={(e: MouseEvent) => { 
+                e.preventDefault();
+                e.stopPropagation();
+                onDirectorySelect(dir);
+              }}
+            >
+              {dir}
+            </div>
+          </div>
+        ))}
+      </div>
       <div class="cards-list">
-        {cards.length === 0 ? (
+        {pagedCards.length === 0 ? (
           <div class="empty-state">
             <p>저장된 카드가 없습니다.</p>
             <p>텍스트를 선택하고 "선택한 텍스트를 카드로 만들기" 명령을 사용해보세요.</p>
           </div>
         ) : (
           <>
-            {cards.map(card => (
+            {pagedCards.map(card => (
               <CardItem 
                 key={card.id} 
                 card={card} 
@@ -156,22 +242,32 @@ export function AllCardsComponent({
             ))}
             
             {/* 페이지네이션 */}
-            {totalPages > 1 && (
+            {totalPagesLocal > 1 && (
               <div class="pagination">
                 <button 
                   class="pagination-btn"
-                  disabled={currentPage === 0}
-                  onClick={() => onPageChange(currentPage - 1)}
+                  disabled={localPage === 0}
+                  onClick={() => setLocalPage(p => {
+                    const newPage = Math.max(0, p - 1);
+                    onPageChange(newPage);
+                    return newPage;
+                  })}
                 >
                   이전
                 </button>
                 <span class="pagination-info">
-                  {currentPage + 1} / {totalPages}
+                  {localPage + 1} / {totalPagesLocal}
                 </span>
                 <button 
                   class="pagination-btn"
-                  disabled={currentPage === totalPages - 1}
-                  onClick={() => onPageChange(currentPage + 1)}
+                  disabled={localPage === totalPagesLocal - 1}
+                  onClick={() => {
+                    setLocalPage(p => {
+                      const newPage = Math.min(totalPagesLocal - 1, p + 1);
+                      onPageChange(newPage);
+                      return newPage;
+                    });
+                  }}
                 >
                   다음
                 </button>

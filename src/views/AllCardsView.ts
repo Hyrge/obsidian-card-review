@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import { h, render } from 'preact';
 import { AllCardsComponent } from '../components/AllCardsComponent';
+import { ITEMS_PER_PAGE } from '../types';
 import type CardReviewPlugin from '../main';
 
 export const ALL_CARDS_VIEW_TYPE = 'all-cards-view';
@@ -8,9 +9,9 @@ export const ALL_CARDS_VIEW_TYPE = 'all-cards-view';
 export class AllCardsView extends ItemView {
   plugin: CardReviewPlugin;
   private currentPage: number = 0;
-  private readonly itemsPerPage: number = 50;
-  private refreshInterval: number | null = null;
+  private readonly itemsPerPage: number = ITEMS_PER_PAGE;
   private isRendering: boolean = false;
+  private selectedDirectory: string = '기본함';
 
   constructor(leaf: WorkspaceLeaf, plugin: CardReviewPlugin) {
     super(leaf);
@@ -31,21 +32,10 @@ export class AllCardsView extends ItemView {
 
   async onOpen() {
     this.renderCards();
-    
-    // 자동 새로고침 타이머 시작 (5초마다)
-    this.refreshInterval = window.setInterval(() => {
-      if (!this.isRendering) {
-        this.refresh();
-      }
-    }, 5000);
   }
 
   async onClose() {
-    // 자동 새로고침 타이머 정리
-    if (this.refreshInterval) {
-      window.clearInterval(this.refreshInterval);
-      this.refreshInterval = null;
-    }
+    // 현재는 폴링을 사용하지 않음
   }
 
   renderCards() {
@@ -56,8 +46,10 @@ export class AllCardsView extends ItemView {
     this.isRendering = true;
     
     try {
-      const container = this.containerEl.children[1];
+      const container = this.contentEl;
       container.empty();
+      // 안전한 렌더 타깃 생성
+      const root = container.createDiv({ cls: 'all-cards-root' });
 
     const handleDeleteCard = async (cardId: string) => {
       try {
@@ -69,7 +61,7 @@ export class AllCardsView extends ItemView {
           this.currentPage--;
         }
         
-        this.renderCards(); // 목록 새로고침
+        this.renderCards(); // 목록 새로고침 (페이지 조정 후 반영)
       } catch (error) {
         console.error('카드 삭제 중 오류:', error);
       }
@@ -97,25 +89,38 @@ export class AllCardsView extends ItemView {
 
     const handlePageChange = (page: number) => {
       this.currentPage = page;
+      // 상위에서 전체 렌더는 유지하되, 빈번 호출 방지
       this.renderCards();
     };
+
+    const handleDirectorySelect = (dir: string) => {
+      this.selectedDirectory = dir;
+      this.renderCards();
+    };
+
+    // 사이드바로 이동 기능을 이전했으므로, 이 핸들러는 유지하되 호출되지 않음
+    const handleMoveSource = async (source: string, dir: string) => {};
 
     // 현재 페이지의 카드들만 가져오기
     const currentCards = this.plugin.getCardsByPage(this.currentPage, this.itemsPerPage);
     const totalPages = this.plugin.getTotalPages(this.itemsPerPage);
+    const allCards = (this.plugin as any).cards || [];
 
     render(
       h(AllCardsComponent, {
         cards: currentCards,
+        allCards,
         onDeleteCard: handleDeleteCard,
         onResetAllCards: handleResetAllCards,
         onPageChange: handlePageChange,
         currentPage: this.currentPage,
         totalPages: totalPages,
         app: this.app,
-        plugin: this.plugin
+        plugin: this.plugin,
+        selectedDirectory: this.selectedDirectory,
+        onDirectorySelect: handleDirectorySelect
       }),
-      container
+      root
     );
     } catch (error) {
       console.error('AllCardsView 렌더링 오류:', error);
