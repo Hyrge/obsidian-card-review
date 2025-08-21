@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { MarkdownRenderer, App, Component } from 'obsidian';
 import { ITEMS_PER_PAGE } from '../types';
@@ -100,8 +99,8 @@ export function AllCardsComponent({
   
   // 전체 카드 통계 (현재 페이지가 아닌 전체)
   const total = allCards.length;
-  const reviewed = allCards.filter((c: any) => c.reviewed).length;
-  const unreviewed = allCards.filter((c: any) => !c.reviewed).length;
+  const reviewed = allCards.filter((c: CardData) => c.reviewed).length;
+  const unreviewed = allCards.filter((c: CardData) => !c.reviewed).length;
 
   // 디렉토리 사전과 선택된 디렉토리의 소스 사전 만들기
   const directories = useMemo(() => {
@@ -136,9 +135,9 @@ export function AllCardsComponent({
     const handleMoveComplete = () => {
       setRefreshTrigger(prev => prev + 1);
     };
-    
-    window.addEventListener('card-review-move-complete' as any, handleMoveComplete);
-    return () => window.removeEventListener('card-review-move-complete' as any, handleMoveComplete);
+
+    window.addEventListener('card-review-move-complete', handleMoveComplete);
+    return () => window.removeEventListener('card-review-move-complete', handleMoveComplete);
   }, [selectedDirectory]);
 
   const handleResetAllCards = async () => {
@@ -190,15 +189,15 @@ export function AllCardsComponent({
           <div
             class={`directory-tile ${dir === selectedDirectory ? 'all-cards' : ''}`}
             style="cursor: pointer; pointer-events: auto;"
-            onClick={(e: any) => { 
+            onClick={(e: MouseEvent) => { 
               e.preventDefault();
               e.stopPropagation();
               onDirectorySelect(dir);
             }}
-            onDragOver={(e: any) => { e.preventDefault(); }}
-            onDrop={(e: any) => {
+            onDragOver={(e: DragEvent) => { e.preventDefault(); }}
+            onDrop={(e: DragEvent) => {
               try {
-                const data = e.dataTransfer.getData('text/plain');
+                const data = e.dataTransfer?.getData('text/plain');
                 if (!data) return;
                 // data에는 source 경로가 들어온다고 가정
                 const payload = JSON.parse(data);
@@ -207,12 +206,14 @@ export function AllCardsComponent({
                   const ev = new CustomEvent('card-review-move-source', { detail: { source: payload.source, dir } });
                   window.dispatchEvent(ev);
                 }
-              } catch {}
+              } catch(error) {
+                console.error('디렉토리 이동 오류:', error);
+				}
             }}
           >
             <div 
               class="directory-title"
-              onClick={(e: any) => { 
+              onClick={(e: MouseEvent) => { 
                 e.preventDefault();
                 e.stopPropagation();
                 onDirectorySelect(dir);

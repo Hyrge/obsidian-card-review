@@ -396,7 +396,7 @@ export default class CardReviewPlugin extends Plugin {
 
 	async loadCards() {
 		const data = await this.loadData();
-    this.cards = (data?.cards || []).map((card: any) => ({
+    this.cards = (data?.cards || []).map((card: CardData) => ({
 			...card,
 			// 기존 카드에 directory 필드가 없으면 기본값 설정
 			directory: card.directory || this.getDirectoryFromPath(card.source)

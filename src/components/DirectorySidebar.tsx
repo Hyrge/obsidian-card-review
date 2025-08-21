@@ -56,14 +56,15 @@ export function DirectorySidebar({ plugin }: DirectorySidebarProps) {
 	};
 
     useEffect(() => {
-        const onMove = async (e: any) => {
-            const { source, dir } = e.detail || {};
+        const onMove = async (e: Event) => {
+            const detail = (e as CustomEvent).detail as { source?: string; dir?: string } | undefined;
+            const { source, dir } = detail || {};
             if (source && dir) {
                 await plugin.moveSourceToDirectory(source, dir);
             }
         };
-        window.addEventListener('card-review-move-source' as any, onMove);
-        return () => window.removeEventListener('card-review-move-source' as any, onMove);
+        window.addEventListener('card-review-move-source', onMove as EventListener);
+        return () => window.removeEventListener('card-review-move-source', onMove as EventListener);
     }, [plugin]);
 
     // 카드 이동 완료 시 UI 새로고침
@@ -72,8 +73,8 @@ export function DirectorySidebar({ plugin }: DirectorySidebarProps) {
             setRefreshTrigger(prev => prev + 1);
         };
         
-        window.addEventListener('card-review-move-complete' as any, handleMoveComplete);
-        return () => window.removeEventListener('card-review-move-complete' as any, handleMoveComplete);
+        window.addEventListener('card-review-move-complete', handleMoveComplete);
+        return () => window.removeEventListener('card-review-move-complete', handleMoveComplete);
     }, []);
 
 	return (
