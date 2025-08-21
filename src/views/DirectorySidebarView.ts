@@ -17,14 +17,20 @@ export class DirectorySidebarView extends ItemView {
 	getDisplayText() { return '카드 디렉토리'; }
 	getIcon() { return 'folders'; }
 
-	onOpen() {
+	async onOpen() {
 		const container = this.contentEl;
 		container.empty();
 		render(h(DirectorySidebar, { plugin: this.plugin }), container);
 	}
 
-	onClose() {
+	async onClose() {
 		this.contentEl.empty();
+	}
+
+	refresh() {
+		const container = this.contentEl;
+		container.empty();
+		render(h(DirectorySidebar, { plugin: this.plugin }), container);
 	}
 }
 

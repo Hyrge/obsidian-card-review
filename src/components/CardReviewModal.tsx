@@ -1,4 +1,4 @@
-import { h } from 'preact';
+// import { h } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { MarkdownRenderer, Component } from 'obsidian';
 
