@@ -11,6 +11,7 @@ export class AllCardsView extends ItemView {
   private currentPage: number = 0;
   private readonly itemsPerPage: number = ITEMS_PER_PAGE;
   private isRendering: boolean = false;
+  private selectedDirectory: string = '기본함';
 
   constructor(leaf: WorkspaceLeaf, plugin: CardReviewPlugin) {
     super(leaf);
@@ -92,6 +93,11 @@ export class AllCardsView extends ItemView {
       this.renderCards();
     };
 
+    const handleDirectorySelect = (dir: string) => {
+      this.selectedDirectory = dir;
+      this.renderCards();
+    };
+
     // 사이드바로 이동 기능을 이전했으므로, 이 핸들러는 유지하되 호출되지 않음
     const handleMoveSource = async (source: string, dir: string) => {};
 
@@ -110,7 +116,9 @@ export class AllCardsView extends ItemView {
         currentPage: this.currentPage,
         totalPages: totalPages,
         app: this.app,
-        plugin: this.plugin
+        plugin: this.plugin,
+        selectedDirectory: this.selectedDirectory,
+        onDirectorySelect: handleDirectorySelect
       }),
       root
     );

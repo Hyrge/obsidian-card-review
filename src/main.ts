@@ -91,6 +91,15 @@ export default class CardReviewPlugin extends Plugin {
 			}
 		});
 
+		// 디렉토리 사이드바 열기 명령어
+		this.addCommand({
+			id: 'open-directory-sidebar',
+			name: '디렉토리 사이드바 열기',
+			callback: () => {
+				this.openDirectorySidebar();
+			}
+		});
+
 		// 모든 카드 리셋 명령어
 		this.addCommand({
 			id: 'reset-all-cards',
@@ -112,12 +121,10 @@ export default class CardReviewPlugin extends Plugin {
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.registerInterval(window.setInterval(() => {}, 5 * 60 * 1000));
 	}
 
 	onunload() {
@@ -296,6 +303,26 @@ export default class CardReviewPlugin extends Plugin {
 		}
 	}
 
+	refreshDirectorySidebar() {
+		try {
+			const leaves = this.app.workspace.getLeavesOfType(DIRECTORY_SIDEBAR_VIEW);
+			leaves.forEach(leaf => {
+				if (leaf.view instanceof DirectorySidebarView) {
+					try {
+						// 안전하게 다시 렌더링
+						setTimeout(() => {
+							leaf.view.onOpen();
+						}, 10);
+					} catch (error) {
+						console.error('DirectorySidebar 새로고침 중 오류:', error);
+					}
+				}
+			});
+		} catch (error) {
+			console.error('refreshDirectorySidebar 전체 오류:', error);
+		}
+	}
+
 	async saveCard(cardId: string, keep: boolean) {
 		const card = this.cards.find(c => c.id === cardId);
 		if (card) {
@@ -363,6 +390,8 @@ export default class CardReviewPlugin extends Plugin {
 		this.invalidateCache();
 		await this.saveCards();
 		this.refreshAllCardsView();
+		// AllCardsComponent와 DirectorySidebar에 카드 이동 완료 알림
+		window.dispatchEvent(new CustomEvent('card-review-move-complete'));
 	}
 
 	async loadCards() {
@@ -439,7 +468,6 @@ export default class CardReviewPlugin extends Plugin {
 			this.userDirectories.delete(target);
 		}
 		await this.saveCards();
-		this.invalidateCache();
 		this.refreshAllCardsView();
 	}
 
@@ -542,7 +570,6 @@ export default class CardReviewPlugin extends Plugin {
 		// 리본 아이콘 찾기
 		const icon = ribbonIcon || document.querySelector('.ribbon-icon[aria-label="카드 리뷰"]') as HTMLElement;
 		if (!icon) {
-			console.log('리본 아이콘을 찾을 수 없습니다');
 			return;
 		}
 		

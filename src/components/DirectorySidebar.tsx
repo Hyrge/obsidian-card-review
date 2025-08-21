@@ -10,8 +10,9 @@ interface DirectorySidebarProps {
 export function DirectorySidebar({ plugin }: DirectorySidebarProps) {
 	const [newDir, setNewDir] = useState('');
 	const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['기본함']));
+	const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-	const directories = useMemo(() => plugin.getAllDirectories(), [plugin.cards]);
+	const directories = useMemo(() => plugin.getAllDirectories(), [plugin.cards, refreshTrigger]);
 
 	const dirToSources = useMemo(() => {
 		const map = new Map<string, Set<string>>();
@@ -35,14 +36,23 @@ export function DirectorySidebar({ plugin }: DirectorySidebarProps) {
 	const handleCreate = async () => {
 		const name = newDir.trim();
 		if (!name) return;
-		await plugin.createDirectory(name);
-		setNewDir('');
+		try {
+			await plugin.createDirectory(name);
+			setNewDir('');
+			setRefreshTrigger(prev => prev + 1);
+		} catch (error) {
+			console.error('디렉토리 생성 오류:', error);
+		}
 	};
 
 	const handleDelete = async (name: string) => {
 		if (name === '기본함') return;
-		await plugin.deleteDirectory(name);
-		if (targetDir === name) setTargetDir('기본함');
+		try {
+			await plugin.deleteDirectory(name);
+			setRefreshTrigger(prev => prev + 1);
+		} catch (error) {
+			console.error('디렉토리 삭제 오류:', error);
+		}
 	};
 
     useEffect(() => {
@@ -55,6 +65,16 @@ export function DirectorySidebar({ plugin }: DirectorySidebarProps) {
         window.addEventListener('card-review-move-source' as any, onMove);
         return () => window.removeEventListener('card-review-move-source' as any, onMove);
     }, [plugin]);
+
+    // 카드 이동 완료 시 UI 새로고침
+    useEffect(() => {
+        const handleMoveComplete = () => {
+            setRefreshTrigger(prev => prev + 1);
+        };
+        
+        window.addEventListener('card-review-move-complete' as any, handleMoveComplete);
+        return () => window.removeEventListener('card-review-move-complete' as any, handleMoveComplete);
+    }, []);
 
 	return (
 		<div class="directory-sidebar" style="padding:12px; display:flex; flex-direction:column; gap:12px;">

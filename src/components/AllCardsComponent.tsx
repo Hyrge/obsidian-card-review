@@ -14,6 +14,8 @@ interface AllCardsComponentProps {
   totalPages: number;
   app: App;
   plugin: Component;
+  selectedDirectory: string;
+  onDirectorySelect: (dir: string) => void;
 }
 
 function CardItem({ card, onDelete, plugin }: { card: CardData; onDelete: (id: string) => void; plugin: Component }) {
@@ -88,11 +90,13 @@ export function AllCardsComponent({
   currentPage,
   totalPages,
   app, 
-  plugin 
+  plugin,
+  selectedDirectory,
+  onDirectorySelect
 }: AllCardsComponentProps) {
   const [isResetting, setIsResetting] = useState(false);
-  const [selectedDirectory, setSelectedDirectory] = useState<string>('기본함');
   const [localPage, setLocalPage] = useState<number>(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // 전체 카드 통계 (현재 페이지가 아닌 전체)
   const total = allCards.length;
@@ -102,16 +106,21 @@ export function AllCardsComponent({
   // 디렉토리 사전과 선택된 디렉토리의 소스 사전 만들기
   const directories = useMemo(() => {
     const map: Record<string, CardData[]> = {};
+    // 기본함은 항상 표시
+    map['기본함'] = [];
+    
     for (const c of allCards) {
       const dir = c.directory || '기본함';
       (map[dir] ||= []).push(c);
     }
+    
     return map;
-  }, [allCards]);
+  }, [allCards, refreshTrigger]);
 
   // 선택 디렉토리의 모든 카드
   const filteredCards = useMemo(() => {
-    return directories[selectedDirectory] || [];
+    const result = directories[selectedDirectory] || [];
+    return result;
   }, [directories, selectedDirectory]);
 
   const totalPagesLocal = Math.max(1, Math.ceil(filteredCards.length / ITEMS_PER_PAGE));
@@ -120,6 +129,16 @@ export function AllCardsComponent({
   // 디렉토리/소스 변경 시 페이지 초기화
   useEffect(() => {
     setLocalPage(0);
+  }, [selectedDirectory]);
+
+  // 카드 이동 이벤트 수신
+  useEffect(() => {
+    const handleMoveComplete = () => {
+      setRefreshTrigger(prev => prev + 1);
+    };
+    
+    window.addEventListener('card-review-move-complete' as any, handleMoveComplete);
+    return () => window.removeEventListener('card-review-move-complete' as any, handleMoveComplete);
   }, [selectedDirectory]);
 
   const handleResetAllCards = async () => {
@@ -170,7 +189,12 @@ export function AllCardsComponent({
         {Object.keys(directories).sort().map((dir) => (
           <div
             class={`directory-tile ${dir === selectedDirectory ? 'all-cards' : ''}`}
-            onClick={() => { setSelectedDirectory(dir); }}
+            style="cursor: pointer; pointer-events: auto;"
+            onClick={(e: any) => { 
+              e.preventDefault();
+              e.stopPropagation();
+              onDirectorySelect(dir);
+            }}
             onDragOver={(e: any) => { e.preventDefault(); }}
             onDrop={(e: any) => {
               try {
@@ -186,7 +210,16 @@ export function AllCardsComponent({
               } catch {}
             }}
           >
-            <div class="directory-title">{dir}</div>
+            <div 
+              class="directory-title"
+              onClick={(e: any) => { 
+                e.preventDefault();
+                e.stopPropagation();
+                onDirectorySelect(dir);
+              }}
+            >
+              {dir}
+            </div>
           </div>
         ))}
       </div>

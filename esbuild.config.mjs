@@ -60,13 +60,11 @@ function copyFilesToBuild() {
 	// manifest.json 복사
 	if (existsSync("manifest.json")) {
 		copyFileSync("manifest.json", "build/manifest.json");
-		console.log("✅ manifest.json copied to build/");
 	}
 
 	// styles.css 복사
 	if (existsSync("styles.css")) {
 		copyFileSync("styles.css", "build/styles.css");
-		console.log("✅ styles.css copied to build/");
 	}
 }
 
@@ -75,7 +73,6 @@ function copyToPluginFolder() {
 	// 플러그인 폴더가 없으면 생성
 	if (!existsSync(PLUGIN_PATH)) {
 		mkdirSync(PLUGIN_PATH, { recursive: true });
-		console.log(`📁 Created plugin folder: ${PLUGIN_PATH}`);
 	}
 
 	// build 폴더의 모든 파일을 플러그인 폴더로 복사
@@ -87,23 +84,14 @@ function copyToPluginFolder() {
 		
 		if (existsSync(sourcePath)) {
 			copyFileSync(sourcePath, targetPath);
-			console.log(`✅ ${file} copied to plugin folder`);
-		} else {
-			console.log(`⚠️  ${file} not found in build folder`);
 		}
 	});
-	
-	console.log(`🎉 All files copied to: ${PLUGIN_PATH}`);
 }
 
 if (prod) {
 	await context.rebuild();
 	copyFilesToBuild();
 	copyToPluginFolder();
-	console.log("🎉 Build completed! Files generated in build/ folder and copied to plugin folder:");
-	console.log("   - main.js");
-	console.log("   - manifest.json");
-	console.log("   - styles.css");
 	process.exit(0);
 } else {
 	await context.watch();
